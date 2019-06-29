@@ -1,0 +1,141 @@
+// -*-java-*-
+syntax = "proto3";
+//option java_multiple_files = true;
+option java_package = "com.cloudant.search3.grpc";
+
+service Search {
+    // Index operations
+    rpc Delete(Index) returns (ServiceResponse);
+    rpc GetUpdateSequence(Index) returns (UpdateSeq);
+    rpc Info(Index) returns (InfoResponse);
+    rpc SetUpdateSequence(SetUpdateSeq) returns (ServiceResponse);
+
+    // Read operations
+    rpc Search(SearchRequest) returns (SearchResponse);
+    rpc GroupSearch(GroupSearchRequest) returns (GroupSearchResponse);
+
+    // Write operations
+    rpc Update(stream DocumentUpdate) returns (ServiceResponse);    
+}
+
+// Uniquely identifies a search index.
+message Index {
+    bytes prefix = 1;
+}
+
+message InfoResponse {
+    uint64 size = 1;
+    uint32 doc_count = 2;
+    uint32 doc_del_count = 3;
+    string committed_seq = 5;
+    string purge_seq = 6;
+}
+
+message Sort {
+    repeated string fields = 1;
+}
+
+
+message SearchRequest {
+    Index index = 1;
+    string query = 2;
+    uint32 limit = 3;
+    bool stale = 4;
+    Sort sort = 5;
+    string partition = 6;
+    repeated string counts = 7;
+    string ranges = 8;
+    string drilldown = 9;
+    repeated string include_fields = 10;
+}
+
+message SearchResponse {
+    uint64 matches = 1;
+    repeated Hit hits = 2;
+}
+
+message GroupSearchRequest {
+    Index index = 1;
+    string query = 2;
+    uint32 limit = 3;
+    bool stale = 4;
+    string group_by = 5;
+    uint32 group_offset = 6;
+    uint32 group_limit = 7;
+    Sort group_sort = 8;
+}
+
+message GroupSearchResponse {
+    uint64 matches = 1;
+    uint64 group_matches = 2;
+    repeated Group groups = 3;
+}
+
+message Group {
+    string by = 1;
+    uint64 matches = 2;
+    repeated GroupHit hits = 3;
+}
+
+message GroupHit {
+    string id = 1;
+    repeated FieldValue order = 2;
+    repeated HitField fields = 3;
+}
+
+message Hit {
+    string id = 1;
+    repeated FieldValue order = 2;
+    repeated HitField fields = 3;
+}
+
+message Document {
+    string index = 1;
+    repeated DocumentField fields = 2;
+}
+
+message DocumentField {
+    string name = 1;
+    FieldValue value = 2;
+    bool analyzed = 3;
+    bool stored = 4;
+    bool facet = 5;
+}
+
+message HitField {
+    string name = 1;
+    FieldValue value = 2;
+}
+
+message FieldValue {
+    oneof value_oneof {
+        string string_value = 1;
+        bool bool_value = 2;
+        double double_value = 3;
+    }
+}
+
+message SearchTerm {
+    string field = 1;
+    string value = 2;
+}
+
+message DocumentUpdate {
+    Index index = 1;
+    string id = 2;
+    repeated DocumentField fields = 3; // leave empty to imply delete.
+}
+
+message UpdateSeq {
+    string seq = 1;
+}
+
+message SetUpdateSeq {
+    Index index = 1;
+    string seq = 2;
+}
+
+message ServiceResponse {
+    uint32 code = 1;
+    string reason = 2;
+}
