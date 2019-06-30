@@ -3,9 +3,19 @@
   {vsn, "0.1.0"},
   {registered, []},
   {mod, {search3_app, []}},
-  {applications,
-   [kernel,
-    stdlib
+  {registered, [
+    search3_sup,
+    search3_worker_server
+  ]},
+  {applications, [
+    kernel,
+    stdlib,
+    erlfdb,
+    couch_log,
+    config,
+    couch_stats,
+    fabric,
+    couch_jobs
    ]},
   {env,[]},
   {modules, []},
