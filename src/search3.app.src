@@ -1,16 +1,24 @@
 {application, search3,
  [{description, "Erlang-side of Search 3.0"},
   {vsn, "0.1.0"},
-  {registered, []},
   {mod, {search3_app, []}},
-  {applications,
-   [kernel,
+  {registered, [
+    search3_sup,
+    search3_worker_manager
+  ]},
+  {applications, [
+    kernel,
     stdlib,
-    grpcbox
+    erlfdb,
+    couch_log,
+    config,
+    couch_stats,
+    fabric,
+    couch_jobs,
+    grpcbox,
+    ctx
    ]},
   {env,[]},
-  {modules, []},
-
   {licenses, ["Apache 2.0"]},
   {links, []}
  ]}.
