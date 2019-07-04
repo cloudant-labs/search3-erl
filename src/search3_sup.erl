@@ -1,26 +1,29 @@
-%%%-------------------------------------------------------------------
-%% @doc search3 top level supervisor.
-%% @end
-%%%-------------------------------------------------------------------
-
 -module(search3_sup).
 
 -behaviour(supervisor).
 
--export([start_link/0]).
+-export([
+    start_link/1
+]).
 
--export([init/1]).
+-export([
+    init/1
+]).
 
--define(SERVER, ?MODULE).
+start_link(Args) ->
+    supervisor:start_link({local, ?MODULE}, ?MODULE, Args).
 
-start_link() ->
-    supervisor:start_link({local, ?SERVER}, ?MODULE, []).
 
 init([]) ->
-    SupFlags = #{strategy => one_for_all,
-                 intensity => 0,
-                 period => 1},
-    ChildSpecs = [],
-    {ok, {SupFlags, ChildSpecs}}.
-
-%% internal functions
+    Flags = #{
+        strategy => one_for_all,
+        intensity => 1,
+        period => 5
+    },
+    Children = [
+        #{
+            id => search3_worker_manager,
+            start => {search3_worker_manager, start_link, []}
+        }
+    ],
+    {ok, {Flags, Children}}.
