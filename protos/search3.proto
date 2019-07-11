@@ -46,11 +46,15 @@ message Sort {
     repeated string fields = 1;
 }
 
+message Bookmark {
+    repeated FieldValue order = 1;
+}
+
 message SearchRequest {
     Index index = 1;
     string query = 2;
     uint32 limit = 3;
-    string bookmark = 4;
+    Bookmark bookmark = 4;
     bool stale = 5;
     Sort sort = 6;
     string partition = 7;
@@ -61,7 +65,7 @@ message SearchRequest {
 }
 
 message SearchResponse {
-    string bookmark = 1;
+    Bookmark bookmark = 1;
     uint64 matches = 2;
     repeated Hit hits = 3;
 }
@@ -86,16 +90,12 @@ message GroupSearchResponse {
 message Group {
     string by = 1;
     uint64 matches = 2;
-    repeated GroupHit hits = 3;
-}
-
-message GroupHit {
-    string id = 1;
-    repeated HitField fields = 3;
+    repeated Hit hits = 3;
 }
 
 message Hit {
     string id = 1;
+    repeated FieldValue order = 2;
     repeated HitField fields = 3;
 }
 
@@ -119,9 +119,12 @@ message HitField {
 
 message FieldValue {
     oneof value {
-        string string = 1;
-        bool bool = 2;
-        double double = 3;
+        bool bool = 1;
+        double double = 2;
+        float float = 3;
+        string string = 4;
+        uint32 int = 5;
+        uint64 long = 6;
     }
 }
 
