@@ -26,11 +26,7 @@ update(Db, Index) ->
 update(#{} = Db, Index, ProgressCallback, ProgressArgs)
         when is_function(ProgressCallback, 6) ->
     try
-        Seq = case search3_rpc:get_update_seq(Index) of
-            <<"0">> -> 0;
-            Else -> Else
-        end,
-        DbSeq = get_db_seq(Db),
+        Seq = search3_rpc:get_update_seq(Index),
         Proc = get_os_process(Index#index.def_lang),
         State = #{
             since_seq => Seq,
@@ -45,8 +41,7 @@ update(#{} = Db, Index, ProgressCallback, ProgressArgs)
         },
         try
             true = proc_prompt(Proc, [<<"add_fun">>, Index#index.def]),
-            update_int(Db, State),
-            search3_rpc:set_update_seq(Index, DbSeq)
+            update_int(Db, State)
         after
             ret_os_process(Proc)
         end
@@ -71,7 +66,8 @@ update_int(#{} = Db, State) ->
         index := Index,
         proc := Proc
     } = FinalState,
-    index_docs(Index, Proc, DocAcc),
+    % purge_seq is empty for now
+    index_docs(Index, Proc, LastSeq, <<>>, DocAcc),
     case Count < Limit of
         true ->
             Cb(undefined, finished, CallbackArgs, Db, Index, LastSeq);
@@ -130,15 +126,15 @@ load_changes(Change, Acc) ->
     end,
     {ok, Acc1}.
 
-index_docs(Index, Proc, Docs) ->
+index_docs(Index, Proc, Seq, PurgeSeq, Docs) ->
     DocIndexerFun = fun
         (#{deleted := true, id:= Id}) ->
-            ok = search3_rpc:update_index(Index, Id, []);
+            ok = search3_rpc:update_index(Index, Id, Seq, PurgeSeq, []);
         (Change) ->
             #{doc := Doc, id:= Id} = Change,
             %% Revisit later for exact format
             Fields = extract_fields(Proc, Doc),
-            search3_rpc:update_index(Index, Id, Fields)
+            search3_rpc:update_index(Index, Id, Seq, PurgeSeq, Fields)
     end,
     lists:foreach(DocIndexerFun, Docs),
     ok.
