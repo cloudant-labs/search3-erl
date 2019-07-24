@@ -11,14 +11,28 @@ run_query(Db, DDoc, IndexName, QueryArgs) ->
     #index_query_args{q = Query} = QueryArgs,
     {ok, Index} = search3_util:design_doc_to_index(DDoc, IndexName),
     Index1 = Index#index{dbname = DbName},
-    maybe_build_index(Db, Index1),
-    {ok, Response, _} = search3_rpc:search_index(Index1, Query),
+    run_query(Db, Index1, Query).
+
+run_query(Db, Index, Query) ->
+    % The UpdateSeq here returned supposedly means the index us up to date.
+    % However there is a scenario were a pod dies at indexing time and the
+    % CommitedSeq is behind the UpdateSeq. In this case we need to re-run the
+    % indexer and search requests again.
+    UpdateSeq = maybe_build_index(Db, Index),
+    {ok, Response, _} = search3_rpc:search_index(Index, Query),
     #{
+        seq := ComittedSeq, 
         bookmark := Bookmark,
         matches := Matches,
         hits := Hits
     } = Response,
-    {Bookmark, Matches, Hits}.
+    case ComittedSeq < UpdateSeq of
+        true ->
+            couch_log:error("Query ~p produced stale results. Re-Running",
+                [Query]),
+            run_query(Db, Index, Query);
+        _ -> {Bookmark, Matches, Hits}
+    end.
 
 maybe_build_index(Db, Index) ->
     {Status, Seq} = fabric2_fdb:transactional(Db, fun(TxDb) ->
@@ -30,7 +44,7 @@ maybe_build_index(Db, Index) ->
                 {false, LatestSeq}
         end
     end),
-    if Status == ready -> true; true ->
+    if Status == ready -> Seq; true ->
         subscribe_and_wait_for_index(Db, Index, Seq)
     end.
 
