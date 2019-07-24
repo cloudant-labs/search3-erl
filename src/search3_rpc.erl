@@ -8,16 +8,19 @@
     get_update_seq/1, 
     delete_index/1,
     info_index/1,
-    set_update_seq/2,
-    update_index/3,
+    update_index/5,
     search_index/2
     ]).
 
 get_update_seq(Index) ->
-    Prefix = get_index_prefix(Index),
-    {ok, SeqMap, _} = search_client:get_update_sequence(Prefix),
-    #{seq := Seq} = SeqMap,
-    Seq.
+    {ok, Response, _Headers} = info_index(Index),
+    #{
+        committed_seq := CommittedSeq
+    } = Response,
+    case CommittedSeq of
+        <<>> -> 0;
+        Seq -> Seq
+    end.
 
 % Not Tested
 delete_index(Index) ->
@@ -29,21 +32,16 @@ info_index(Index) ->
     Prefix = get_index_prefix(Index),
     search_client:info(Prefix).
 
-
-set_update_seq(Index, Seq) ->
-    Prefix = get_index_prefix(Index),
-    search_client:set_update_sequence(#{index => Prefix, seq => Seq}).
-
-
-update_index(Index, Id, Fields) ->
+update_index(Index, Id, Seq, PurgeSeq, Fields) ->
     Prefix = get_index_prefix(Index),
     Fields1 = make_fields_map(Fields),
-    search_client:update_document(#{index => Prefix, id => Id, fields => Fields1}).
+    search_client:update_document(#{index => Prefix, id => Id,
+        seq => #{seq => Seq}, purge_seq => #{seq => PurgeSeq}, fields => Fields1}).
 
 search_index(Index, Query) ->
     Prefix = get_index_prefix(Index),
     Query1 = binary_to_list(Query),
-    search_client:search(#{index => Prefix, query => Query}).
+    search_client:search(#{index => Prefix, query => Query1}).
 
 
 % TODO:
