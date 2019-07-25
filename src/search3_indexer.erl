@@ -1,13 +1,21 @@
 -module(search3_indexer).
 
 -export([
-    update/2,
-    update/4
+    update/2
+]).
+
+-export([
+    spawn_link/0
+]).
+
+
+-export([
+    init/0
 ]).
 
 -include("search3.hrl").
 -include_lib("couch/include/couch_db.hrl").
--include_lib("fabric/src/fabric2.hrl").
+-include_lib("fabric/include/fabric2.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
 -import(couch_query_servers, [
@@ -19,29 +27,57 @@
 % TODO: 
 % 1) Error Handling
 
-update(Db, Index) ->
-    Noop = fun (_) -> ok end,
-    update(Db, Index, Noop, []).
+spawn_link() ->
+    proc_lib:spawn_link(?MODULE, init, []).
 
-update(#{} = Db, Index, ProgressCallback, ProgressArgs)
-        when is_function(ProgressCallback, 6) ->
+init() ->
+    {ok, Job, JobData} = couch_jobs:accept(?SEARCH_JOB_TYPE, #{}),
+    #{
+        <<"db_name">> := DbName,
+        <<"ddoc_id">> := DDocId,
+        <<"name">> := IndexName,
+        <<"sig">> := JobSig
+    } = JobData,
+    {ok, Db} = fabric2_db:open(DbName, []),
+    {ok, DDoc} = fabric2_db:open_doc(Db, DDocId),
+    {ok, Index} = search3_util:design_doc_to_index(DDoc, IndexName),
+    Index1 = Index#index{dbname = DbName},
+    HexSig = fabric2_util:to_hex(Index1#index.sig),
+
+    if  HexSig == JobSig -> ok; true ->
+        couch_jobs:finish(undefined, Job, JobData#{
+            error => sig_changed,
+            reason => <<"Design document was modified">>
+        }),
+        exit(normal)
+    end,
+    State = #{
+        txdb => undefined,
+        search_seq => undefined,
+        count => 0,
+        limit => config:get_integer("search3", "change_limit", 100),
+        doc_acc => [],
+        last_seq => undefined,
+        job => Job,
+        job_data => JobData,
+        index => Index1,
+        proc => undefined
+    },
+    update(Db, State).
+
+update(#{} = Db, State) ->
     try
+        Index = maps:get(index, State),
         Seq = search3_rpc:get_update_seq(Index),
         Proc = get_os_process(Index#index.def_lang),
-        State = #{
-            since_seq => Seq,
-            count => 0,
-            limit => config:get_integer("search3", "change_limit", 100),
-            doc_acc => [],
+        NewState = State#{
+            search_seq => Seq,
             last_seq => Seq,
-            callback => ProgressCallback,
-            callback_args => ProgressArgs,
-            index => Index,
             proc => Proc
         },
         try
             true = proc_prompt(Proc, [<<"add_fun">>, Index#index.def]),
-            update_int(Db, State)
+            update_int(Db, NewState)
         after
             ret_os_process(Proc)
         end
@@ -52,43 +88,52 @@ update(#{} = Db, Index, ProgressCallback, ProgressArgs)
     end.
 
 update_int(#{} = Db, State) ->
-    {ok, FinalState} = fabric2_fdb:transactional(Db, fun(TxDb) ->
+    State3 = fabric2_fdb:transactional(Db, fun(TxDb) ->
         State1 = maps:put(tx_db, TxDb, State),
-        fold_changes(State1)
+        {ok, State2} = fold_changes(State1),
+        #{
+            count := Count,
+            limit := Limit,
+            doc_acc := DocAcc,
+            last_seq := LastSeq,
+            index := Index,
+            proc := Proc
+        } = State2,
+
+        % purge_seq is empty for now
+        index_docs(Index, Proc, LastSeq, <<>>, DocAcc),
+        case Count < Limit of
+            true ->
+                report_progress(State2, finished),
+                finished;
+            false ->
+                report_progress(State2, update),
+                State2#{
+                    tx_db := undefined,
+                    count := 0,
+                    doc_acc := [],
+                    search_seq => LastSeq,
+                    % make sure this correct
+                    last_seq := 0
+                }
+        end
     end),
-    #{
-        count := Count,
-        limit := Limit,
-        doc_acc := DocAcc,
-        last_seq := LastSeq,
-        callback := Cb,
-        callback_args := CallbackArgs,
-        index := Index,
-        proc := Proc
-    } = FinalState,
-    % purge_seq is empty for now
-    index_docs(Index, Proc, LastSeq, <<>>, DocAcc),
-    case Count < Limit of
-        true ->
-            Cb(undefined, finished, CallbackArgs, Db, Index, LastSeq);
-        false ->
-            NextState = maps:merge(FinalState, #{
-                limit => Limit,
-                count => 0,
-                doc_acc => [],
-                since_seq => LastSeq,
-                last_seq => 0
-            }),
-            update_int(Db, NextState)
+    case State3 of
+        finished ->
+            % should we ret_os_process(Proc) here? or in the after clause
+            % in update/2?
+            ok;
+        _ ->
+            update_int(Db, State3)
     end.
 
 fold_changes(State) ->
     #{
-        since_seq := SinceSeq,
+        search_seq := SearchSeq,
         limit := Limit,
         tx_db := TxDb
     } = State,
-    fabric2_db:fold_changes(TxDb, SinceSeq,
+    fabric2_db:fold_changes(TxDb, SearchSeq,
         fun load_changes/2, State, [{limit, Limit}]).
 
 % grabs the document from changes feed, and stores it into the document
@@ -104,6 +149,7 @@ load_changes(Change, Acc) ->
         sequence := LastSeq,
         deleted := Deleted
     } = Change,
+    couch_log:notice("Id of document loaded ~p", [Id]),
     Acc1 = case Id of
         <<"_design/", _/binary>> ->
             maps:merge(Acc, #{
@@ -144,7 +190,35 @@ extract_fields(Proc, Doc) ->
     [Fields|_] = proc_prompt(Proc, [<<"index_doc">>, Json]),
     [list_to_tuple(Field) || Field <- Fields].
 
-get_db_seq(Db) ->
-    fabric2_fdb:transactional(Db, fun(TxDb) ->
-        fabric2_fdb:get_last_change(TxDb)
-    end).
+report_progress(State, UpdateType) ->
+    #{
+        tx_db := TxDb,
+        job := Job,
+        job_data := JobData,
+        last_seq := LastSeq
+    } = State,
+
+    #{
+        <<"db_name">> := DbName,
+        <<"ddoc_id">> := DDocId,
+        <<"name">> := IndexName,
+        <<"sig">> := Sig
+    } = JobData,
+
+    % Reconstruct from scratch to remove any
+    % possible existing error state.
+    NewData = #{
+        <<"db_name">> => DbName,
+        <<"ddoc_id">> => DDocId,
+        <<"name">> => IndexName,
+        <<"sig">> => Sig,
+        <<"search_seq">> => LastSeq
+    },
+
+    case UpdateType of
+        update ->
+            couch_jobs:update(TxDb, Job, NewData);
+        finished ->
+            % couch_log:notice("Finished Job ~p", [NewData]),
+            couch_jobs:finish(TxDb, Job, NewData)
+    end.
