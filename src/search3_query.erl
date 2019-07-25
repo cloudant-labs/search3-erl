@@ -28,68 +28,21 @@ run_query(Db, Index, Query) ->
     } = Response,
     case ComittedSeq < UpdateSeq of
         true ->
-            couch_log:error("Query ~p produced stale results. Re-Running",
+            couch_log:notice("Query ~p produced stale results. Re-Running",
                 [Query]),
             run_query(Db, Index, Query);
         _ -> {Bookmark, Matches, Hits}
     end.
 
 maybe_build_index(Db, Index) ->
-    {Status, Seq} = fabric2_fdb:transactional(Db, fun(TxDb) ->
-        case is_index_updated(TxDb, Index) of
-            {true, UpdateSeq} ->
-                {ready, UpdateSeq};
-            {false, LatestSeq} ->
-                maybe_add_couch_job(TxDb, Index),
-                {false, LatestSeq}
+    WaitSeq = fabric2_fdb:transactional(Db, fun(TxDb) ->
+        DbSeq = fabric2_db:get_update_seq(TxDb),
+        SearchSeq = search3_rpc:get_update_seq(Index),
+        case DbSeq == SearchSeq of
+            true -> ready;
+            false -> SearchSeq
         end
     end),
-    if Status == ready -> Seq; true ->
-        subscribe_and_wait_for_index(Db, Index, Seq)
-    end.
-
-is_index_updated(Db, Index) ->
-    #{name := DbName} = Db,
-    Index1 = Index#index{dbname = DbName},
-    fabric2_fdb:transactional(Db, fun(TxDb) ->
-        UpdateSeq = search3_rpc:get_update_seq(Index1),
-        LastChange = fabric2_fdb:get_last_change(TxDb),
-        {UpdateSeq == LastChange, LastChange}
-    end).
-
-maybe_add_couch_job(TxDb, Index) ->
-    case search3_jobs:status(TxDb, Index) of
-        running ->
-            ok;
-        pending ->
-            ok;
-        Status when Status == finished orelse Status == not_found ->
-            search3_jobs:add(TxDb, Index)
-    end.
-
-subscribe_and_wait_for_index(Db, Index, Seq) ->
-    case search3_jobs:subscribe(Db, Index) of
-        {error, Error} ->
-            throw({error, Error});
-        {ok, finished, _} ->
-            ready;
-        {ok, Subscription, _JobState, _} ->
-            wait_for_index_ready(Subscription, Db, Index, Seq)
-    end.
-
-wait_for_index_ready(Subscription, Db, Index, Seq) ->
-    Out = search3_jobs:wait(Subscription),
-    case Out of
-        {finished, _JobData} ->
-            ready;
-        {pending, _JobData} ->
-            wait_for_index_ready(Subscription, Db, Index, Seq);
-        {running, #{last_seq := LastSeq}} ->
-            if LastSeq =< Seq -> ready; true ->
-                wait_for_index_ready(Subscription, Db, Index, Seq)
-            end;
-        {running, _JobData} ->
-            wait_for_index_ready(Subscription, Db, Index, Seq);
-        {error, Error} ->
-            throw({error, Error})
+    if WaitSeq == ready -> ok; true ->
+        search3_jobs:build_search(Db, Index, WaitSeq)
     end.
