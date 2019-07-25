@@ -149,7 +149,6 @@ load_changes(Change, Acc) ->
         sequence := LastSeq,
         deleted := Deleted
     } = Change,
-    couch_log:notice("Id of document loaded ~p", [Id]),
     Acc1 = case Id of
         <<"_design/", _/binary>> ->
             maps:merge(Acc, #{
@@ -219,6 +218,5 @@ report_progress(State, UpdateType) ->
         update ->
             couch_jobs:update(TxDb, Job, NewData);
         finished ->
-            % couch_log:notice("Finished Job ~p", [NewData]),
             couch_jobs:finish(TxDb, Job, NewData)
     end.
