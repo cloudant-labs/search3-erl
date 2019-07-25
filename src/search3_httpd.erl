@@ -121,6 +121,8 @@ hits_to_json(_DbName, _IncludeDocs, Hits) ->
     ConvertedHits = lists:map(ConvertHitsFun, Hits),
     {[{hits, ConvertedHits}]}.
 
+bookmark_to_json(<<>>) ->
+    [];
 bookmark_to_json(Bookmark) ->
     #{order := Order} = Bookmark,
     order_to_json(Order).

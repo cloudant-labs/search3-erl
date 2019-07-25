@@ -20,12 +20,14 @@ run_query(Db, Index, Query) ->
     % indexer and search requests again.
     UpdateSeq = maybe_build_index(Db, Index),
     {ok, Response, _} = search3_rpc:search_index(Index, Query),
+    % TODO: should move this response processing into separate function
     #{
         seq := ComittedSeq, 
-        bookmark := Bookmark,
         matches := Matches,
         hits := Hits
     } = Response,
+    Bookmark = maps:get(bookmark, Response, <<>>),
+    % TODO: do this re-try thing in a separate function
     #{
         seq := CommitedSeqVal
     } = ComittedSeq,
