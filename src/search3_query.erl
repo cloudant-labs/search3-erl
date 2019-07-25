@@ -26,22 +26,24 @@ run_query(Db, Index, Query) ->
         matches := Matches,
         hits := Hits
     } = Response,
-    case ComittedSeq < UpdateSeq of
-        true ->
-                [Query]),
-            run_query(Db, Index, Query);
+    #{
+        seq := CommitedSeqVal
+    } = ComittedSeq,
+    case CommitedSeqVal < UpdateSeq of
+        true -> run_query(Db, Index, Query);
         _ -> {Bookmark, Matches, Hits}
     end.
 
 maybe_build_index(Db, Index) ->
-    WaitSeq = fabric2_fdb:transactional(Db, fun(TxDb) ->
+    {Action, WaitSeq} = fabric2_fdb:transactional(Db, fun(TxDb) ->
         DbSeq = fabric2_db:get_update_seq(TxDb),
         SearchSeq = search3_rpc:get_update_seq(Index),
         case DbSeq == SearchSeq of
-            true -> ready;
-            false -> DbSeq
+            true -> {ready, DbSeq};
+            false -> {build, DbSeq}
         end
     end),
-    if WaitSeq == ready -> ok; true ->
+    if Action == ready -> ok; true ->
         search3_jobs:build_search(Db, Index, WaitSeq)
-    end.
+    end,
+    WaitSeq.
