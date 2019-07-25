@@ -1,99 +1,104 @@
+% Licensed under the Apache License, Version 2.0 (the "License"); you may not
+% use this file except in compliance with the License. You may obtain a copy of
+% the License at
+%
+%   http://www.apache.org/licenses/LICENSE-2.0
+%
+% Unless required by applicable law or agreed to in writing, software
+% distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+% WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+% License for the specific language governing permissions and limitations under
+% the License.
+
 -module(search3_jobs).
 
 -export([
-    status/2,
-    add/2,
-
-    accept/0,
-    get_job_data/1,
-    update/5,
-    finish/5,
     set_timeout/0,
-
-    subscribe/2,
-    wait/1,
-    unsubscribe/1,
-
-    create_job_id/2
+    build_search/3,
+    build_search_async/2
 ]).
 
--define(SEARCH_JOB_TYPE, <<"search3">>).
+-ifdef(TEST).
+-compile(export_all).
+-compile(nowarn_export_all).
+-endif.
 
 -include("search3.hrl").
 
-% Query request usage of jobs
-
-status(TxDb, Index) ->
-    JobId = create_job_id(TxDb, Index),
-
-    case couch_jobs:get_job_state(TxDb, ?SEARCH_JOB_TYPE, JobId) of
-        {ok, State} -> State;
-        {error, not_found} -> not_found;
-        Error -> Error
-    end.
-
-add(TxDb, Index) ->
-    JobData = create_job_data(TxDb, Index, 0),
-
-    JobId = create_job_id(TxDb, Index),
-    JTx = couch_jobs_fdb:get_jtx(TxDb),
-    couch_log:notice("Job Db ~p, transaction: ~p", [TxDb, JTx]),
-    couch_jobs:add(JTx, ?SEARCH_JOB_TYPE, JobId, JobData).
-
-% search3_worker api
-
-accept() ->
-    couch_jobs:accept(?SEARCH_JOB_TYPE).
-
-get_job_data(JobId) ->
-    couch_jobs:get_job_data(undefined, ?SEARCH_JOB_TYPE, JobId).
-
-update(JTx, Job, Db, Index, LastSeq) ->
-    JobData = create_job_data(Db, Index, LastSeq),
-    couch_jobs:update(JTx, Job, JobData).
-
-finish(JTx, Job, Db, Index, LastSeq) ->
-    JobData = create_job_data(Db, Index, LastSeq),
-    couch_jobs:finish(JTx, Job, JobData).
 
 set_timeout() ->
-    couch_log:notice("Calling set_timeout", []),
     couch_jobs:set_type_timeout(?SEARCH_JOB_TYPE, 6 * 1000).
 
-% Watcher Job api
-
-subscribe(Db, Index) ->
-    JobId = create_job_id(Db, Index),
-    couch_jobs:subscribe(?SEARCH_JOB_TYPE, JobId).
-
-wait(JobSubscription) ->
-    case couch_jobs:wait(JobSubscription, infinity) of
-        {?SEARCH_JOB_TYPE, _JobId, JobState, JobData} -> {JobState, JobData};
-        {timeout} -> {error, timeout}
+build_search(TxDb, Index, UpdateSeq) ->
+    {ok, JobId} = build_search_async(TxDb, Index),
+    case wait_for_job(JobId, UpdateSeq) of
+        ok -> ok;
+        retry -> build_search(TxDb, Index, UpdateSeq)
     end.
 
-unsubscribe(JobSubscription) ->
-    couch_jobs:unsubscribe(JobSubscription).
+build_search_async(TxDb, Index) ->
+    JobId = job_id(TxDb, Index),
+    JobData = job_data(TxDb, Index),
+    ok = couch_jobs:add(undefined, ?SEARCH_JOB_TYPE, JobId, JobData),
+    {ok, JobId}.
 
-% Internal
+wait_for_job(JobId, UpdateSeq) ->
+    case couch_jobs:subscribe(?SEARCH_JOB_TYPE, JobId) of
+        {ok, Subscription, _State, _Data} ->
+            wait_for_job(JobId, Subscription, UpdateSeq);
+        {ok, finished, Data} ->
+            case Data of
+                #{<<"search_seq">> := SearchSeq} when SearchSeq >= UpdateSeq ->
+                    ok;
+                _ ->
+                    retry
+            end
+    end.
 
-create_job_id(#{name := DbName}, #index{sig = Sig}) ->
-    create_job_id(DbName, Sig);
+wait_for_job(JobId, Subscription, UpdateSeq) ->
+    case wait(Subscription) of
+        {error, Error} ->
+            erlang:error(Error);
+        {finished, #{<<"error">> := Error, <<"reason">> := Reason}} ->
+            erlang:error({binary_to_atom(Error, latin1), Reason});
+        {finished, #{<<"search_seq">> := SearchSeq}} when SearchSeq >= UpdateSeq ->
+            ok;
+        {finished, _} ->
+            wait_for_job(JobId, UpdateSeq);
+        {_State, #{<<"search_seq">> := SearchSeq}} when SearchSeq >= UpdateSeq ->
+            couch_jobs:unsubscribe(Subscription),
+            ok;
+        {_, _} ->
+            wait_for_job(JobId, Subscription, UpdateSeq)
+    end.
 
-create_job_id(DbName, Sig) ->
-    <<DbName/binary, Sig/binary>>.
 
-create_job_data(Db, Index, LastSeq) ->
-    #{name := DbName} = Db,
+job_id(#{name := DbName}, #index{sig = Sig}) ->
+    job_id(DbName, Sig);
 
+job_id(DbName, Sig) ->
+    HexSig = fabric2_util:to_hex(Sig),
+    <<DbName/binary, "-", HexSig/binary>>.
+
+
+job_data(Db, Index) ->
     #index{
         ddoc_id = DDocId,
-        name = IndexName
+        name = IndexName,
+        sig = Sig
     } = Index,
 
     #{
-        db_name => DbName,
+        db_name => fabric2_db:name(Db),
         ddoc_id => DDocId,
-        last_seq => LastSeq,
-        name => IndexName
+        name => IndexName,
+        sig => fabric2_util:to_hex(Sig)
     }.
+
+wait(Subscription) ->
+    case couch_jobs:wait(Subscription, infinity) of
+        {?SEARCH_JOB_TYPE, _JobId, JobState, JobData} ->
+            {JobState, JobData};
+        timeout ->
+            {error, timeout}
+    end.
