@@ -1,4 +1,4 @@
--define(INDEX_JOB_TYPE, <<"search">>).
+-define(SEARCH_JOB_TYPE, <<"search">>).
 
 -record(index, {
     current_seq=0,
