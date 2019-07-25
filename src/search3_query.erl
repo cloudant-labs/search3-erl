@@ -28,7 +28,6 @@ run_query(Db, Index, Query) ->
     } = Response,
     case ComittedSeq < UpdateSeq of
         true ->
-            couch_log:notice("Query ~p produced stale results. Re-Running",
                 [Query]),
             run_query(Db, Index, Query);
         _ -> {Bookmark, Matches, Hits}
@@ -40,7 +39,7 @@ maybe_build_index(Db, Index) ->
         SearchSeq = search3_rpc:get_update_seq(Index),
         case DbSeq == SearchSeq of
             true -> ready;
-            false -> SearchSeq
+            false -> DbSeq
         end
     end),
     if WaitSeq == ready -> ok; true ->
