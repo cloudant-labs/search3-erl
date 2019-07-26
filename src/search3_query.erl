@@ -8,18 +8,17 @@
 
 run_query(Db, DDoc, IndexName, QueryArgs) ->
     #{name := DbName} = Db,
-    #index_query_args{q = Query} = QueryArgs,
     {ok, Index} = search3_util:design_doc_to_index(DDoc, IndexName),
     Index1 = Index#index{dbname = DbName},
-    run_query(Db, Index1, Query).
+    run_query(Db, Index1, QueryArgs).
 
-run_query(Db, Index, Query) ->
+run_query(Db, Index, QueryArgs) ->
     % The UpdateSeq here returned supposedly means the index us up to date.
     % However there is a scenario were a pod dies at indexing time and the
     % CommitedSeq is behind the UpdateSeq. In this case we need to re-run the
     % indexer and search requests again.
     UpdateSeq = maybe_build_index(Db, Index),
-    {ok, Response, _} = search3_rpc:search_index(Index, Query),
+    {ok, Response, _} = search3_rpc:search_index(Index, QueryArgs),
     % TODO: should move this response processing into separate function
     #{
         seq := ComittedSeq, 
@@ -32,7 +31,7 @@ run_query(Db, Index, Query) ->
         seq := CommitedSeqVal
     } = ComittedSeq,
     case CommitedSeqVal < UpdateSeq of
-        true -> run_query(Db, Index, Query);
+        true -> run_query(Db, Index, QueryArgs);
         _ -> {Bookmark, Matches, Hits}
     end.
 
