@@ -81,14 +81,15 @@ construct_search_msg(Prefix, #index_query_args{}=QueryArgs) ->
         include_fields = IncludeFields
     } = QueryArgs,
     Query1 = binary_to_list(Query),
-    couch_log:notice("Sort Arg ~p ", [Sort]),
-    SortArg = construct_sort_arg(Sort),
+    couch_log:notice("Bookmark ~p ", [Bookmark]),
+    SortArg = construct_sort_msg(Sort),
+    Bookmark1 = construct_bookmark_msg(Bookmark),
     #{
         index => Prefix,
         query => Query1,
         limit => Limit,
         % TODO: test later
-        % bookmark => Bookmark,
+        bookmark => Bookmark1,
         stale => Stale,
         sort => SortArg
         % this even an option anymore?
@@ -100,10 +101,18 @@ construct_search_msg(Prefix, #index_query_args{}=QueryArgs) ->
         % include_fields => IncludeFields
     }.
 
-% the grpc client looks for a map when encoding
-construct_sort_arg(relevance) ->
+construct_sort_msg(relevance) ->
     #{};
-construct_sort_arg(SortArg) when is_binary(SortArg) ->
+construct_sort_msg(SortArg) when is_binary(SortArg) ->
     #{fields => [SortArg]};
-construct_sort_arg(SortArg) when is_list(SortArg) ->
-    #{fields => SortArg}.
+construct_sort_msg(SortArg) when is_list(SortArg) ->
+    #{fields => SortArg};
+construct_sort_msg(_) ->
+    #{}.
+
+construct_bookmark_msg(Bookmark) when is_list(Bookmark) ->
+    Float = lists:nth(1, Bookmark),
+    Int = lists:nth(2, Bookmark),
+    #{order => [#{value => {float, Float}}, #{value => {int, Int}}]};
+construct_bookmark_msg(_) ->
+    #{order => []}.
