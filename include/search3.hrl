@@ -20,16 +20,6 @@
     new_api=true
 }).
 
-    % Index index = 1;
-    % string query = 2;
-    % uint32 limit = 3;
-    % bool stale = 4;
-    % Sort sort = 5;
-    % string partition = 6;
-    % repeated string counts = 7;
-    % string ranges = 8;
-    % string drilldown = 9;
-    % repeated string include_fields = 10;
 -record(index_query_args, {
     q,
     partition=nil,
