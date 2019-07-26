@@ -38,10 +38,10 @@ update_index(Index, Id, Seq, PurgeSeq, Fields) ->
     search_client:update_document(#{index => Prefix, id => Id,
         seq => #{seq => Seq}, purge_seq => #{seq => PurgeSeq}, fields => Fields1}).
 
-search_index(Index, Query) ->
+search_index(Index, QueryArgs) ->
     Prefix = get_index_prefix(Index),
-    Query1 = binary_to_list(Query),
-    search_client:search(#{index => Prefix, query => Query1}).
+    Msg = construct_search_msg(Prefix, QueryArgs),
+    search_client:search(Msg).
 
 
 % TODO:
@@ -66,3 +66,44 @@ make_fields_map(Fields) when is_list(Fields) ->
             #{name => Name, value => #{value => {bool, Value}}}
     end,
     lists:map(FieldsMapFun, Fields).
+
+construct_search_msg(Prefix, #index_query_args{}=QueryArgs) ->
+    #index_query_args{
+        q = Query,
+        limit = Limit,
+        bookmark = Bookmark,
+        stale = Stale,
+        sort = Sort,
+        partition = Partition,
+        counts = Counts,
+        ranges = Ranges,
+        drilldown = DrillDown,
+        include_fields = IncludeFields
+    } = QueryArgs,
+    Query1 = binary_to_list(Query),
+    couch_log:notice("Sort Arg ~p ", [Sort]),
+    SortArg = construct_sort_arg(Sort),
+    #{
+        index => Prefix,
+        query => Query1,
+        limit => Limit,
+        % TODO: test later
+        % bookmark => Bookmark,
+        stale => Stale,
+        sort => SortArg
+        % this even an option anymore?
+        % partition => Partition
+        % Test these individually
+        % counts => Counts
+        % ranges => Ranges
+        % drilldown => DrillDown,
+        % include_fields => IncludeFields
+    }.
+
+% the grpc client looks for a map when encoding
+construct_sort_arg(relevance) ->
+    #{};
+construct_sort_arg(SortArg) when is_binary(SortArg) ->
+    #{fields => [SortArg]};
+construct_sort_arg(SortArg) when is_list(SortArg) ->
+    #{fields => SortArg}.
