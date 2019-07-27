@@ -174,7 +174,7 @@ load_changes(Change, Acc) ->
 index_docs(Index, Proc, Seq, PurgeSeq, Docs) ->
     DocIndexerFun = fun
         (#{deleted := true, id:= Id}) ->
-            ok = search3_rpc:update_index(Index, Id, Seq, PurgeSeq, []);
+            search3_rpc:delete_index(Index, Id, Seq, PurgeSeq);
         (Change) ->
             #{doc := Doc, id:= Id} = Change,
             %% Revisit later for exact format
