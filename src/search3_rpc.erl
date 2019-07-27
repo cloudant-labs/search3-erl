@@ -6,7 +6,7 @@
 
 -export([
     get_update_seq/1, 
-    delete_index/1,
+    delete_index/4,
     info_index/1,
     update_index/5,
     search_index/2
@@ -22,12 +22,11 @@ get_update_seq(Index) ->
         Seq -> Seq
     end.
 
-% Not Tested
-delete_index(Index) ->
+delete_index(Index, Id, Seq, PurgeSeq) ->
     Prefix = get_index_prefix(Index),
-    search_client:delete(Prefix).
+    search_client:delete_document(#{index => Prefix, id => Id,
+        seq => #{seq => Seq}, purge_seq => #{seq => PurgeSeq}}).
 
-% Not Tested
 info_index(Index) ->
     Prefix = get_index_prefix(Index),
     search_client:info(Prefix).
@@ -81,15 +80,12 @@ construct_search_msg(Prefix, #index_query_args{}=QueryArgs) ->
         include_fields = IncludeFields
     } = QueryArgs,
     Query1 = binary_to_list(Query),
-    couch_log:notice("Bookmark ~p ", [Bookmark]),
     SortArg = construct_sort_msg(Sort),
-    Bookmark1 = construct_bookmark_msg(Bookmark),
-    #{
+    Msg = #{
         index => Prefix,
         query => Query1,
         limit => Limit,
         % TODO: test later
-        bookmark => Bookmark1,
         stale => Stale,
         sort => SortArg
         % this even an option anymore?
@@ -99,10 +95,16 @@ construct_search_msg(Prefix, #index_query_args{}=QueryArgs) ->
         % ranges => Ranges
         % drilldown => DrillDown,
         % include_fields => IncludeFields
-    }.
+    },
 
-construct_sort_msg(relevance) ->
-    #{};
+    % Need to figure out the actual default value for Bookmark
+    case construct_bookmark_msg(Bookmark) of
+        #{} -> ok;
+        Bookmark1 -> maps:put(bookmark, Bookmark1, Msg)
+    end,
+    Msg.
+
+
 construct_sort_msg(SortArg) when is_binary(SortArg) ->
     #{fields => [SortArg]};
 construct_sort_msg(SortArg) when is_list(SortArg) ->
@@ -114,5 +116,6 @@ construct_bookmark_msg(Bookmark) when is_list(Bookmark) ->
     Float = lists:nth(1, Bookmark),
     Int = lists:nth(2, Bookmark),
     #{order => [#{value => {float, Float}}, #{value => {int, Int}}]};
+% the default value would be us starting at the beginning
 construct_bookmark_msg(_) ->
-    #{order => []}.
+    #{}.
