@@ -26,19 +26,24 @@ run_query(Db, Index, QueryArgs) ->
         hits := Hits
     } = Response,
     Bookmark = maps:get(bookmark, Response, <<>>),
-    % TODO: do this re-try thing in a separate function
-    #{
-        seq := CommitedSeqVal
-    } = ComittedSeq,
-    case CommitedSeqVal < UpdateSeq of
-        true -> run_query(Db, Index, QueryArgs);
-        _ -> {Bookmark, Matches, Hits}
-    end.
+    % % TODO: do this re-try thing in a separate function
+    % #{
+    %     seq := CommitedSeqVal
+    % } = ComittedSeq,
+    % couch_log:notice("CommitedSeqVal ~p ", [ComittedSeq]),
+    % couch_log:notice("DBUpdateSeqVal ~p ", [UpdateSeq]),
+    % case CommitedSeqVal < UpdateSeq of
+    %     true -> run_query(Db, Index, QueryArgs);
+    %     _ -> {Bookmark, Matches, Hits}
+    % end,
+
+     {Bookmark, Matches, Hits}.
 
 maybe_build_index(Db, Index) ->
     {Action, WaitSeq} = fabric2_fdb:transactional(Db, fun(TxDb) ->
         DbSeq = fabric2_db:get_update_seq(TxDb),
         SearchSeq = search3_rpc:get_update_seq(Index),
+
         case DbSeq == SearchSeq of
             true -> {ready, DbSeq};
             false -> {build, DbSeq}
