@@ -12,10 +12,6 @@
     send_error/2
 ]).
 
-% TODO:
-% 1) Group Search
-% 2) Pass in Bookmarks
-
 handle_search_req(Req, Db, DDoc) ->
     handle_search_req(Req, Db, DDoc, 0, 500).
 
