@@ -18,26 +18,8 @@ run_query(Db, Index, QueryArgs) ->
     % CommitedSeq is behind the UpdateSeq. In this case we need to re-run the
     % indexer and search requests again.
     UpdateSeq = maybe_build_index(Db, Index),
-    {ok, Response, _} = search3_rpc:search_index(Index, QueryArgs),
-    % TODO: should move this response processing into separate function
-    #{
-        seq := ComittedSeq, 
-        matches := Matches,
-        hits := Hits
-    } = Response,
-    Bookmark = maps:get(bookmark, Response, <<>>),
-    % % TODO: do this re-try thing in a separate function
-    % #{
-    %     seq := CommitedSeqVal
-    % } = ComittedSeq,
-    % couch_log:notice("CommitedSeqVal ~p ", [ComittedSeq]),
-    % couch_log:notice("DBUpdateSeqVal ~p ", [UpdateSeq]),
-    % case CommitedSeqVal < UpdateSeq of
-    %     true -> run_query(Db, Index, QueryArgs);
-    %     _ -> {Bookmark, Matches, Hits}
-    % end,
+    handle_response(search3_rpc:search_index(Index, QueryArgs)).
 
-     {Bookmark, Matches, Hits}.
 
 maybe_build_index(Db, Index) ->
     {Action, WaitSeq} = fabric2_fdb:transactional(Db, fun(TxDb) ->
@@ -53,3 +35,17 @@ maybe_build_index(Db, Index) ->
         search3_jobs:build_search(Db, Index, WaitSeq)
     end,
     WaitSeq.
+
+handle_response({ok, Response, _Header}) ->
+    #{
+        seq := ComittedSeq, 
+        matches := Matches,
+        hits := Hits
+    } = Response,
+    Bookmark = maps:get(bookmark, Response, <<>>),
+    {Bookmark, Matches, Hits};
+% sort error
+handle_response({error, {<<"9">>, Msg}}) ->
+    throw({bad_request, Msg});
+handle_response({error, {Code, Reason}}) ->
+    erlang:error({Code, Reason}).
