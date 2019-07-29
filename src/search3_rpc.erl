@@ -146,5 +146,7 @@ construct_bookmark_msg(Bookmark) when is_binary(Bookmark) ->
     Int = lists:nth(2, Unpacked),
     #{order => [#{value => Float}, #{value => Int}]};
 % the default value would be us starting at the beginning
+construct_bookmark_msg(nil) ->
+    #{};
 construct_bookmark_msg(_) ->
-    #{}.
+    throw({bad_request, "Invalid bookmark parameter supplied"}).
