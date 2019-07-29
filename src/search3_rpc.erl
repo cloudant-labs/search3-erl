@@ -140,10 +140,11 @@ construct_sort_msg(SortArg) when is_list(SortArg) ->
 construct_sort_msg(_) ->
     #{}.
 
-construct_bookmark_msg(Bookmark) when is_list(Bookmark) ->
-    Float = lists:nth(1, Bookmark),
-    Int = lists:nth(2, Bookmark),
-    #{order => [#{value => {float, Float}}, #{value => {int, Int}}]};
+construct_bookmark_msg(Bookmark) when is_binary(Bookmark) ->
+    Unpacked = binary_to_term(couch_util:decodeBase64Url(Bookmark)),
+    Float = lists:nth(1, Unpacked),
+    Int = lists:nth(2, Unpacked),
+    #{order => [#{value => Float}, #{value => Int}]};
 % the default value would be us starting at the beginning
 construct_bookmark_msg(_) ->
     #{}.

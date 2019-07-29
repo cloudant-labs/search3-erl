@@ -27,7 +27,7 @@ handle_search_req(#httpd{method=Method, path_parts=[_, _, _, _, IndexName]}=Req
     Bookmark1 = bookmark_to_json(Bookmark),
     send_json(Req, 200, {[
         {total_rows, Matches},
-        {bookmark, {Bookmark1}},
+        {bookmark, Bookmark1},
         {rows, Hits1}
 ]});
 
@@ -135,7 +135,8 @@ bookmark_to_json(<<>>) ->
     [];
 bookmark_to_json(Bookmark) ->
     #{order := Order} = Bookmark,
-    order_to_json(Order).
+    Bin = term_to_binary(order_to_json(Order)),
+    couch_util:encodeBase64Url(Bin).
 
 order_to_json(Order) ->
     GetOrderFun = fun (Ord) ->
