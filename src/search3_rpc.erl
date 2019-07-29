@@ -38,14 +38,16 @@ update_index(Index, Id, Seq, PurgeSeq, Fields) ->
         seq => #{seq => Seq}, purge_seq => #{seq => PurgeSeq}, fields => Fields1}).
 
 search_index(Index, QueryArgs) ->
+    #index_query_args{grouping = Grouping} = QueryArgs,
     Prefix = get_index_prefix(Index),
-    Msg = construct_search_msg(Prefix, QueryArgs),
-    search_client:search(Msg).
-
-
-% TODO:
-% 1) Read operations
-% rpc GroupSearch(GroupSearchRequest) returns (GroupSearchResponse);
+    case Grouping#grouping.by of
+        nil ->
+            Msg = construct_search_msg(Prefix, QueryArgs),
+            search_client:search(Msg);
+        _ ->
+            Msg2 = construct_group_msg(Prefix, QueryArgs),
+            search_client:group_search(Msg2)
+    end.
 
 %% Internal
 
@@ -104,6 +106,32 @@ construct_search_msg(Prefix, #index_query_args{}=QueryArgs) ->
     end,
     Msg.
 
+construct_group_msg(Prefix, #index_query_args{}=QueryArgs) ->
+    #index_query_args{
+        q = Query,
+        limit = Limit,
+        bookmark = Bookmark,
+        stale = Stale,
+        grouping = Grouping
+    } = QueryArgs,
+    #grouping{
+        by = GroupBy,
+        offset = GroupOffSet,
+        limit = GroupLimit,
+        sort = GroupSort
+    } = Grouping,
+    Query1 = binary_to_list(Query),
+    SortArg = construct_sort_msg(GroupSort),
+    Msg = #{
+        index => Prefix,
+        query => Query1,
+        limit => Limit,
+        stale => Stale,
+        group_by => GroupBy,
+        group_offset => GroupOffSet,
+        group_limit => GroupLimit,
+        group_sort => SortArg
+    }.
 
 construct_sort_msg(SortArg) when is_binary(SortArg) ->
     #{fields => [SortArg]};

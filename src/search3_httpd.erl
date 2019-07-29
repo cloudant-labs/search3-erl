@@ -67,6 +67,8 @@ validate_index_query(stale, Value, Args) ->
     Args#index_query_args{stale=Value};
 validate_index_query(limit, Value, Args) ->
     Args#index_query_args{limit=Value};
+validate_index_query(group_field, Value, #index_query_args{grouping=Grouping}=Args) ->
+    Args#index_query_args{grouping=Grouping#grouping{by=Value}};
 validate_index_query(include_docs, Value, Args) ->
     Args#index_query_args{include_docs=Value};
 validate_index_query(include_fields, Value, Args) ->
@@ -87,7 +89,13 @@ parse_index_param("bookmark", Value) ->
 parse_index_param("sort", Value) ->
     [{sort, ?JSON_DECODE(Value)}];
 parse_index_param("limit", Value) ->
-    [{limit, ?JSON_DECODE(Value)}].
+    [{limit, ?JSON_DECODE(Value)}];
+parse_index_param("group_field", Value) ->
+    [{group_field, ?l2b(Value)}];
+parse_index_param("group_sort", Value) ->
+    [{group_sort, ?JSON_DECODE(Value)}];
+parse_index_param("group_limit", Value) ->
+    [{group_limit, parse_positive_int_param("group_limit", Value, "max_group_limit", "200")}].
 
 parse_json_index_param(<<"q">>, Value) ->
     [{q, Value}];
@@ -98,7 +106,13 @@ parse_json_index_param(<<"bookmark">>, Value) ->
 parse_json_index_param(<<"sort">>, Value) ->
     [{sort, Value}];
 parse_json_index_param(<<"limit">>, Value) ->
-    [{limit, Value}].
+    [{limit, Value}];
+parse_json_index_param(<<"group_field">>, Value) ->
+    [{group_field, Value}];
+parse_json_index_param(<<"group_sort">>, Value) ->
+    [{group_sort, Value}];
+parse_json_index_param(<<"group_limit">>, Value) ->
+    [{group_limit, parse_positive_int_param("group_limit", Value, "max_group_limit", "200")}].
 
 validate_search_restrictions(_Db, _DDoc, Args) ->
     #index_query_args{
@@ -133,3 +147,34 @@ order_to_json(Order) ->
         Val
     end,
     lists:map(GetOrderFun, Order).
+
+parse_int_param(_, Val) when is_integer(Val) ->
+    Val;
+parse_int_param(Name, Val) ->
+    case (catch list_to_integer(Val)) of
+    IntVal when is_integer(IntVal) ->
+        IntVal;
+    _ ->
+        Msg = io_lib:format("Invalid value for ~s: ~p", [Name, Val]),
+        throw({query_parse_error, ?l2b(Msg)})
+    end.
+
+parse_positive_int_param(Name, Val, Prop, Default) ->
+    MaximumVal = list_to_integer(
+        config:get("search3", Prop, Default)),
+    case parse_int_param(Name, Val) of
+    IntVal when IntVal > MaximumVal ->
+        Fmt = "Value for ~s is too large, must not exceed ~p",
+        Msg = io_lib:format(Fmt, [Name, MaximumVal]),
+        throw({query_parse_error, ?l2b(Msg)});
+    IntVal when IntVal > 0 ->
+        IntVal;
+    IntVal when IntVal =< 0 ->
+        Fmt = "~s must be greater than zero",
+        Msg = io_lib:format(Fmt, [Name]),
+        throw({query_parse_error, ?l2b(Msg)});
+    _ ->
+        Fmt = "Invalid value for ~s: ~p",
+        Msg = io_lib:format(Fmt, [Name, Val]),
+        throw({query_parse_error, ?l2b(Msg)})
+    end.
