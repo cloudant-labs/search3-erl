@@ -36,9 +36,10 @@ maybe_build_index(Db, Index) ->
     end,
     WaitSeq.
 
+handle_response({ok, #{groups := Groups, matches := Matches} = Response, _}) ->
+    {Matches, Groups};
 handle_response({ok, Response, _Header}) ->
     #{
-        seq := ComittedSeq, 
         matches := Matches,
         hits := Hits
     } = Response,
