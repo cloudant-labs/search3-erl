@@ -18,18 +18,27 @@ handle_search_req(Req, Db, DDoc) ->
 handle_search_req(#httpd{method=Method, path_parts=[_, _, _, _, IndexName]}=Req
                   ,Db, DDoc, _, _)
   when Method == 'GET'; Method == 'POST' ->
-    DbName = fabric2_db:name(Db),
-    QueryArgs = parse_index_params(Req, Db),
+    QueryArgs = #index_query_args{
+        include_docs = IncludeDocs
+    } = parse_index_params(Req, Db),
     validate_search_restrictions(Db, DDoc, QueryArgs),
-    {Bookmark, Matches, Hits} = search3_query:run_query(Db, DDoc,
-        IndexName, QueryArgs),
-    Hits1 = hits_to_json(DbName, false, Hits),
-    Bookmark1 = bookmark_to_json(Bookmark),
-    send_json(Req, 200, {[
-        {total_rows, Matches},
-        {bookmark, Bookmark1},
-        {rows, Hits1}
-]});
+
+    case search3_query:run_query(Db, DDoc, IndexName, QueryArgs) of
+        {Matches, Groups} ->
+            GroupsJson = groups_to_json(Db, IncludeDocs, Groups),
+            send_json(Req, 200, {[
+                {total_rows, Matches},
+                {groups, GroupsJson}
+            ]});
+        {Bookmark, Matches, Hits} ->
+            Hits1 = hits_to_json(Db, IncludeDocs, Hits),
+            Bookmark1 = bookmark_to_json(Bookmark),
+            send_json(Req, 200, {[
+                {total_rows, Matches},
+                {bookmark, Bookmark1},
+                {rows, Hits1}
+            ]})
+    end;
 
 handle_search_req(#httpd{path_parts=[_, _, _, _, _]}=Req, _Db, _DDoc, _RetryCount, _RetryPause) ->
     send_method_not_allowed(Req, "GET,POST");
@@ -86,6 +95,8 @@ parse_index_param("sort", Value) ->
     [{sort, ?JSON_DECODE(Value)}];
 parse_index_param("limit", Value) ->
     [{limit, ?JSON_DECODE(Value)}];
+parse_index_param("include_docs", Value) ->
+    [{include_docs, parse_bool_param("include_docs", Value)}];
 parse_index_param("group_field", Value) ->
     [{group_field, ?l2b(Value)}];
 parse_index_param("group_sort", Value) ->
@@ -103,6 +114,8 @@ parse_json_index_param(<<"sort">>, Value) ->
     [{sort, Value}];
 parse_json_index_param(<<"limit">>, Value) ->
     [{limit, Value}];
+parse_json_index_param(<<"include_docs">>, Value) when is_boolean(Value) ->
+    [{include_docs, Value}];
 parse_json_index_param(<<"group_field">>, Value) ->
     [{group_field, Value}];
 parse_json_index_param(<<"group_sort">>, Value) ->
@@ -122,11 +135,16 @@ validate_search_restrictions(_Db, _DDoc, Args) ->
             ok
     end.
 
-hits_to_json(_DbName, _IncludeDocs, Hits) ->
+hits_to_json(Db, IncludeDocs, Hits) ->
     ConvertHitsFun = fun
         (#{fields := Fields, id := Id, order := Order}) ->
             Order1 = order_to_json(Order),
-            {[{fields, Fields}, {id, Id}, {order, {Order1}}]}
+            if IncludeDocs ->
+                Doc = search3_util:get_doc(Db, Id),
+                {[{fields, Fields}, {id, Id}, {order, {Order1}}, Doc]};
+            true ->
+                {[{fields, Fields}, {id, Id}, {order, {Order1}}]}
+            end
     end,
     ConvertedHits = lists:map(ConvertHitsFun, Hits),
     {[{hits, ConvertedHits}]}.
@@ -144,6 +162,22 @@ order_to_json(Order) ->
         Val
     end,
     lists:map(GetOrderFun, Order).
+
+groups_to_json(Db, IncludeDocs, Groups) when is_list(Groups) ->
+    ConvertGroupFun = fun
+        (#{by := By, matches := Matches, hits := Hits}) ->
+            {Hits1} = hits_to_json(Db, IncludeDocs, Hits),
+            {[{by, By}, {matches, Matches} | Hits1]}
+    end,
+    lists:map(ConvertGroupFun, Groups).
+
+parse_bool_param(_, Val) when is_boolean(Val) ->
+    Val;
+parse_bool_param(_, "true") -> true;
+parse_bool_param(_, "false") -> false;
+parse_bool_param(Name, Val) ->
+    Msg = io_lib:format("Invalid value for ~s: ~p", [Name, Val]),
+    throw({query_parse_error, ?l2b(Msg)}).
 
 parse_int_param(_, Val) when is_integer(Val) ->
     Val;

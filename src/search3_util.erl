@@ -1,6 +1,6 @@
 -module(search3_util).
 
--export([design_doc_to_index/2]).
+-export([design_doc_to_index/2, get_doc/2]).
 
 -include_lib("couch/include/couch_db.hrl").
 
@@ -34,3 +34,9 @@ design_doc_to_index(#doc{id=Id,body={Fields}}, IndexName) ->
             {error, InvalidDDocError}
     end.
 
+get_doc(Db, DocId) ->
+    DocObj = case fabric2_db:open_doc(Db, DocId) of
+        {ok, Doc} -> couch_doc:to_json_obj(Doc, []);
+        {not_found, _} -> null
+    end,
+    {doc, DocObj}.
