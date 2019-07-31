@@ -139,15 +139,26 @@ hits_to_json(Db, IncludeDocs, Hits) ->
     ConvertHitsFun = fun
         (#{fields := Fields, id := Id, order := Order}) ->
             Order1 = order_to_json(Order),
+            Fields1 = fields_to_json(Fields),
             if IncludeDocs ->
                 Doc = search3_util:get_doc(Db, Id),
-                {[{fields, Fields}, {id, Id}, {order, {Order1}}, Doc]};
+                {[{fields, Fields1}, {id, Id}, {order, {Order1}}, Doc]};
             true ->
-                {[{fields, Fields}, {id, Id}, {order, {Order1}}]}
+                {[{fields, Fields1}, {id, Id}, {order, {Order1}}]}
             end
     end,
     ConvertedHits = lists:map(ConvertHitsFun, Hits),
     {[{hits, ConvertedHits}]}.
+
+fields_to_json([]) ->
+    [];
+fields_to_json(Fields) when is_list(Fields) ->
+    ConvertFieldsFun = fun
+        (#{name := Name, value := Value}) ->
+            #{value := {_Type, BinValue}} = Value,
+            {[{Name, BinValue}]}
+    end,
+    lists:map(ConvertFieldsFun, Fields).
 
 bookmark_to_json(<<>>) ->
     [];
