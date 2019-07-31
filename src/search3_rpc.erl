@@ -91,8 +91,11 @@ construct_per_fields(Analyzer) ->
             Fields
     end,
     MakeMapFun = fun
-        ({Field, PerFieldAnalyzer}, Map) ->
-            maps:put(Field, #{name => PerFieldAnalyzer}, Map)
+        ({Field, PerFieldAnalyzer}, Map) when is_binary(PerFieldAnalyzer) ->
+            maps:put(Field, #{name => PerFieldAnalyzer}, Map);
+        ({Field, {PerFieldAnalyzer}}, Map) ->
+            AnalyzerSpec = construct_analyzer_spec(PerFieldAnalyzer),
+            maps:put(Field, AnalyzerSpec, Map)
     end,
     lists:foldl(MakeMapFun, #{}, Fields1).
 
