@@ -23,23 +23,23 @@ get_update_seq(Index) ->
     end.
 
 delete_index(Index, Id, Seq, PurgeSeq) ->
-    Prefix = get_index_prefix(Index),
+    Prefix = construct_index_msg(Index),
     search_client:delete_document(#{index => Prefix, id => Id,
         seq => #{seq => Seq}, purge_seq => #{seq => PurgeSeq}}).
 
 info_index(Index) ->
-    Prefix = get_index_prefix(Index),
+    Prefix = construct_index_msg(Index),
     search_client:info(Prefix).
 
 update_index(Index, Id, Seq, PurgeSeq, Fields) ->
-    Prefix = get_index_prefix(Index),
+    Prefix = construct_index_msg(Index),
     Fields1 = make_fields_map(Fields),
     search_client:update_document(#{index => Prefix, id => Id,
         seq => #{seq => Seq}, purge_seq => #{seq => PurgeSeq}, fields => Fields1}).
 
 search_index(Index, QueryArgs) ->
     #index_query_args{grouping = Grouping} = QueryArgs,
-    Prefix = get_index_prefix(Index),
+    Prefix = construct_index_msg(Index),
     case Grouping#grouping.by of
         nil ->
             Msg = construct_search_msg(Prefix, QueryArgs),
@@ -51,10 +51,59 @@ search_index(Index, QueryArgs) ->
 
 %% Internal
 
-get_index_prefix(#index{dbname = DbName, sig = Signature}) ->
+construct_index_msg(#index{dbname = DbName, sig = Signature, analyzer = <<"standard">>}) ->
     Prefix= <<DbName/binary, Signature/binary>>,
-    #{prefix => Prefix}.
+    #{prefix => Prefix};
+construct_index_msg(#index{dbname = DbName, sig = Signature,
+        analyzer = Analyzer}) when is_binary(Analyzer) ->
+    Prefix= <<DbName/binary, Signature/binary>>,
+    #{prefix => Prefix, default => #{name => Analyzer}};
+construct_index_msg(#index{dbname = DbName, sig = Signature,
+        analyzer = {Analyzer}}) ->
+    Prefix= <<DbName/binary, Signature/binary>>,
+    case construct_analyzer_spec(Analyzer) of
+        #{name := <<"perfield">>, stopwords := Stopwords} ->
+            Fields = construct_per_fields(Analyzer),
+            couch_log:notice("Fields ~p ", [Fields]),
+            Default = construct_default(Analyzer, Stopwords),
+            couch_log:notice("Default ~p ", [Fields]),
+            #{prefix => Prefix, default => Default, per_field => Fields};
+        AnalyzerSpec ->
+            couch_log:notice("AnalyzerSpec ~p ", [AnalyzerSpec]),
+            #{prefix => Prefix, default => AnalyzerSpec}
+    end.
 
+construct_analyzer_spec(Analyzer) ->
+    {_, Name} = lists:keyfind(<<"name">>, 1, Analyzer),
+    Stopwords = case lists:keyfind(<<"stopwords">>, 1, Analyzer) of
+        false ->
+            [];
+        {_, Words} ->
+            Words
+    end,
+    #{name => Name, stopwords => Stopwords}.
+
+construct_per_fields(Analyzer) ->
+    Fields1 = case lists:keyfind(<<"fields">>, 1, Analyzer) of
+        false ->
+            [];
+        {_, {Fields}} ->
+            Fields
+    end,
+    MakeMapFun = fun
+        ({Field, PerFieldAnalyzer}, Map) ->
+            maps:put(Field, #{name => PerFieldAnalyzer}, Map)
+    end,
+    lists:foldl(MakeMapFun, #{}, Fields1).
+
+construct_default(Analyzer, Stopwords) ->
+    Default = case lists:keyfind(<<"default">>, 1, Analyzer) of
+        false ->
+            <<"standard">>;
+        {<<"default">>, Def} ->
+            Def
+    end,
+    #{name => Default, stopwords => Stopwords}.
 
 make_fields_map(Fields) when is_list(Fields) ->
     % need to figure what the third element holds and if we need to hold it
