@@ -34,8 +34,9 @@ info_index(Index) ->
 update_index(Index, Id, Seq, PurgeSeq, Fields) ->
     Prefix = construct_index_msg(Index),
     Fields1 = make_fields_map(Fields),
-    search_client:update_document(#{index => Prefix, id => Id,
-        seq => #{seq => Seq}, purge_seq => #{seq => PurgeSeq}, fields => Fields1}).
+    Msg = #{index => Prefix, id => Id,
+        seq => #{seq => Seq}, purge_seq => #{seq => PurgeSeq}, fields => Fields1},
+    search_client:update_document(Msg).
 
 search_index(Index, QueryArgs) ->
     #index_query_args{grouping = Grouping} = QueryArgs,
@@ -43,6 +44,7 @@ search_index(Index, QueryArgs) ->
     case Grouping#grouping.by of
         nil ->
             Msg = construct_search_msg(Prefix, QueryArgs),
+            couch_log:notice("Msg search ~p", [Msg]),
             search_client:search(Msg);
         _ ->
             Msg2 = construct_group_msg(Prefix, QueryArgs),
@@ -111,12 +113,18 @@ construct_default(Analyzer, Stopwords) ->
 make_fields_map(Fields) when is_list(Fields) ->
     % need to figure what the third element holds and if we need to hold it
     FieldsMapFun = fun
-        ({Name, Value, _}) when is_binary(Value) ->
-            #{name => Name, value => #{value => {string, binary_to_list(Value)}}};
-        ({Name, Value, _}) when is_number(Value) ->
-            #{name => Name, value => #{value => {double, Value}}};
-        ({Name, Value, _}) when is_boolean(Value) ->
-            #{name => Name, value => #{value => {bool, Value}}}
+        ({Name, Value, {Options}}) when is_binary(Value) ->
+            M1 = #{name => Name, value => #{value => {string, binary_to_list(Value)}}},
+            M2 = maps:from_list([{list_to_atom(?b2l(Opt)), Val} || {Opt, Val} <- Options]),
+            maps:merge(M1, M2);
+        ({Name, Value, {Options}}) when is_number(Value) ->
+            M1 = #{name => Name, value => #{value => {double, Value}}},
+            M2 = maps:from_list([{list_to_atom(?b2l(Opt)), Val} || {Opt, Val} <- Options]),
+            maps:merge(M1, M2);
+        ({Name, Value, {Options}}) when is_boolean(Value) ->
+            M1 = #{name => Name, value => #{value => {bool, Value}}},
+            M2 = maps:from_list([{list_to_atom(?b2l(Opt)), Val} || {Opt, Val} <- Options]),
+            maps:merge(M1, M2)
     end,
     lists:map(FieldsMapFun, Fields).
 
