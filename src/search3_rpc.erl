@@ -113,20 +113,25 @@ construct_default(Analyzer, Stopwords) ->
 
 make_fields_map(Fields) when is_list(Fields) ->
     FieldsMapFun = fun
-        ({Name, Value, {Options}}) when is_binary(Value) ->
-            M1 = #{name => Name, value => #{value => {string, binary_to_list(Value)}}},
-            M2 = maps:from_list([{list_to_atom(?b2l(Opt)), Val} || {Opt, Val} <- Options]),
-            maps:merge(M1, M2);
-        ({Name, Value, {Options}}) when is_number(Value) ->
-            M1 = #{name => Name, value => #{value => {double, Value}}},
-            M2 = maps:from_list([{list_to_atom(?b2l(Opt)), Val} || {Opt, Val} <- Options]),
-            maps:merge(M1, M2);
-        ({Name, Value, {Options}}) when is_boolean(Value) ->
-            M1 = #{name => Name, value => #{value => {bool, Value}}},
-            M2 = maps:from_list([{list_to_atom(?b2l(Opt)), Val} || {Opt, Val} <- Options]),
+        ({Name, Value, {Options}}) ->
+            M1 = #{name => Name, value => fields_value(Value)},
+            Fields1 = options_list(Options),
+            M2 = maps:from_list(Fields1),
             maps:merge(M1, M2)
     end,
     lists:map(FieldsMapFun, Fields).
+
+fields_value(Value) when is_binary(Value) ->
+    #{value => {string, Value}};
+fields_value(Value) when is_number(Value) ->
+    #{value => {double, Value}};
+fields_value(Value) when is_boolean(Value) ->
+    #{value => {bool, Value}}.
+
+% This function is required we need to convert <<"stored">>, <<"facet">>,
+% <<"analzyed">> into atoms for grpc.
+options_list(Options) when is_list(Options) ->
+    [{list_to_existing_atom(?b2l(Opt)), Val} || {Opt, Val} <- Options].
 
 construct_search_msg(Prefix, #index_query_args{}=QueryArgs) ->
     #index_query_args{
