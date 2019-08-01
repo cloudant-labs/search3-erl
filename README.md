@@ -24,16 +24,18 @@ Currently, we are in the beta version, and we support:
 
 Code layout:
 
+* `search3.proto` - This is the grpc proto file. We use this to generate
+    search_client.
 * `search3_httpd` - This handles the _search endpoint
 * `search3_epi` - Hooks into couch_epi plugin 
 * `search3_httpd` - Handles _search endpoint
 * `search3_httpd_handlers` - Httpd handler for search3_epi
 * `search3_indexer` - All indexing capabilities reside in this module.
-* `search_jobs.erl` - Hooks indexing into the new couch_jobs system.
+* `search3_jobs` - Hooks indexing into the new couch_jobs system.
 * `search3_response` - Parses grpc message from server and formats it into
     json.
 * `search3_rpc` - Layer on top of search_client, which is the generated stub
     code from grpcbox.
 * `search3_sup` - Generic supervisor for search3_worker_manager
-* `search_util` - Utility functions
-* `search_worker_manager` - spawns search3_indexer processes for indexing
+* `search3_util` - Utility functions
+* `search3_worker_manager` - spawns search3_indexer processes for indexing
