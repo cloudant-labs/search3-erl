@@ -1,5 +1,5 @@
 {application, search3,
- [{description, "Erlang-side of Search 3.0"},
+ [{description, "Erlang side of Search 3.0"},
   {vsn, "0.1.0"},
   {mod, {search3_app, []}},
   {registered, [
@@ -19,6 +19,6 @@
     ctx
    ]},
   {env,[]},
-  {licenses, ["Apache 2.0"]},
+  {licenses, []},
   {links, []}
  ]}.

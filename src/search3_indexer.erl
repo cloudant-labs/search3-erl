@@ -24,9 +24,6 @@
     proc_prompt/2
 ]).
 
-% TODO: 
-% 1) Error Handling
-
 spawn_link() ->
     proc_lib:spawn_link(?MODULE, init, []).
 
@@ -100,7 +97,10 @@ update_int(#{} = Db, State) ->
             proc := Proc
         } = State2,
 
-        % purge_seq is empty for now
+        % 1) purge_seq is empty for now, subsequent releases will support this
+        % 2) We are indexing inside a transaction, which has a timeout of 5s.
+        % This can potentially be a problem for large documents. We should
+        % revisit this design later.  
         index_docs(Index, Proc, LastSeq, <<>>, DocAcc),
         case Count < Limit of
             true ->
@@ -113,7 +113,7 @@ update_int(#{} = Db, State) ->
                     count := 0,
                     doc_acc := [],
                     search_seq => LastSeq,
-                    % make sure this correct
+                    % make sure this reset here is correct
                     last_seq := 0
                 }
         end
@@ -177,7 +177,6 @@ index_docs(Index, Proc, Seq, PurgeSeq, Docs) ->
             search3_rpc:delete_index(Index, Id, Seq, PurgeSeq);
         (Change) ->
             #{doc := Doc, id:= Id} = Change,
-            %% Revisit later for exact format
             Fields = extract_fields(Proc, Doc),
             search3_rpc:update_index(Index, Id, Seq, PurgeSeq, Fields)
     end,

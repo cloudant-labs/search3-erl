@@ -13,19 +13,17 @@ run_query(Db, DDoc, IndexName, QueryArgs) ->
     run_query(Db, Index1, QueryArgs).
 
 run_query(Db, Index, QueryArgs) ->
-    % The UpdateSeq here returned supposedly means the index us up to date.
+    % TODO:The UpdateSeq here returned supposedly means the index us up to date.
     % However there is a scenario were a pod dies at indexing time and the
     % CommitedSeq is behind the UpdateSeq. In this case we need to re-run the
-    % indexer and search requests again.
-    UpdateSeq = maybe_build_index(Db, Index),
+    % indexer and search requests again. 
+    maybe_build_index(Db, Index),
     handle_response(search3_rpc:search_index(Index, QueryArgs)).
-
 
 maybe_build_index(Db, Index) ->
     {Action, WaitSeq} = fabric2_fdb:transactional(Db, fun(TxDb) ->
         DbSeq = fabric2_db:get_update_seq(TxDb),
         SearchSeq = search3_rpc:get_update_seq(Index),
-
         case DbSeq == SearchSeq of
             true -> {ready, DbSeq};
             false -> {build, DbSeq}
@@ -36,7 +34,7 @@ maybe_build_index(Db, Index) ->
     end,
     WaitSeq.
 
-handle_response({ok, #{groups := Groups, matches := Matches} = Response, _}) ->
+handle_response({ok, #{groups := Groups, matches := Matches}, _}) ->
     {Matches, Groups};
 handle_response({ok, Response, _Header}) ->
     #{

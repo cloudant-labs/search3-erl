@@ -22,17 +22,17 @@ handle_search_req(#httpd{method=Method, path_parts=[_, _, _, _, IndexName]}=Req
         include_docs = IncludeDocs
     } = parse_index_params(Req, Db),
     validate_search_restrictions(Db, DDoc, QueryArgs),
-
     case search3_query:run_query(Db, DDoc, IndexName, QueryArgs) of
         {Matches, Groups} ->
-            GroupsJson = groups_to_json(Db, IncludeDocs, Groups),
+            GroupsJson = search3_response:groups_to_json(Db, IncludeDocs,
+                Groups),
             send_json(Req, 200, {[
                 {total_rows, Matches},
                 {groups, GroupsJson}
             ]});
         {Bookmark, Matches, Hits} ->
-            Hits1 = hits_to_json(Db, IncludeDocs, Hits),
-            Bookmark1 = bookmark_to_json(Bookmark),
+            Hits1 = search3_response:hits_to_json(Db, IncludeDocs, Hits),
+            Bookmark1 = search3_response:bookmark_to_json(Bookmark),
             send_json(Req, 200, {[
                 {total_rows, Matches},
                 {bookmark, Bookmark1},
@@ -40,7 +40,8 @@ handle_search_req(#httpd{method=Method, path_parts=[_, _, _, _, IndexName]}=Req
             ]})
     end;
 
-handle_search_req(#httpd{path_parts=[_, _, _, _, _]}=Req, _Db, _DDoc, _RetryCount, _RetryPause) ->
+handle_search_req(#httpd{path_parts=[_, _, _, _, _]}=Req, _Db, _DDoc,
+        _RetryCount, _RetryPause) ->
     send_method_not_allowed(Req, "GET,POST");
 handle_search_req(Req, _Db, _DDoc, _RetryCount, _RetryPause) ->
     send_error(Req, {bad_request, "path not recognized"}).
@@ -66,23 +67,6 @@ parse_index_params(IndexParams, _) ->
         validate_index_query(K, V, Args2)
     end, Args, IndexParams).
 
-validate_index_query(q, Value, Args) ->
-    Args#index_query_args{q=Value};
-validate_index_query(stale, Value, Args) ->
-    Args#index_query_args{stale=Value};
-validate_index_query(limit, Value, Args) ->
-    Args#index_query_args{limit=Value};
-validate_index_query(group_field, Value, #index_query_args{grouping=Grouping}=Args) ->
-    Args#index_query_args{grouping=Grouping#grouping{by=Value}};
-validate_index_query(include_docs, Value, Args) ->
-    Args#index_query_args{include_docs=Value};
-validate_index_query(include_fields, Value, Args) ->
-    Args#index_query_args{include_fields=Value};
-validate_index_query(bookmark, Value, Args) ->
-    Args#index_query_args{bookmark=Value};
-validate_index_query(sort, Value, Args) ->
-    Args#index_query_args{sort=Value}.
-
 parse_index_param("", _) ->
     [];
 parse_index_param("q", Value) ->
@@ -102,7 +86,8 @@ parse_index_param("group_field", Value) ->
 parse_index_param("group_sort", Value) ->
     [{group_sort, ?JSON_DECODE(Value)}];
 parse_index_param("group_limit", Value) ->
-    [{group_limit, parse_positive_int_param("group_limit", Value, "max_group_limit", "200")}].
+    [{group_limit, parse_positive_int_param("group_limit", Value,
+        "max_group_limit", "200")}].
 
 parse_json_index_param(<<"q">>, Value) ->
     [{q, Value}];
@@ -121,66 +106,8 @@ parse_json_index_param(<<"group_field">>, Value) ->
 parse_json_index_param(<<"group_sort">>, Value) ->
     [{group_sort, Value}];
 parse_json_index_param(<<"group_limit">>, Value) ->
-    [{group_limit, parse_positive_int_param("group_limit", Value, "max_group_limit", "200")}].
-
-validate_search_restrictions(_Db, _DDoc, Args) ->
-    #index_query_args{
-        q = Query
-    } = Args,
-    case Query of
-        undefined ->
-            Msg1 = <<"Query must include a 'q' or 'query' argument">>,
-            throw({query_parse_error, Msg1});
-        _ ->
-            ok
-    end.
-
-hits_to_json(Db, IncludeDocs, Hits) ->
-    ConvertHitsFun = fun
-        (#{fields := Fields, id := Id, order := Order}) ->
-            Order1 = order_to_json(Order),
-            Fields1 = fields_to_json(Fields),
-            if IncludeDocs ->
-                Doc = search3_util:get_doc(Db, Id),
-                {[{fields, Fields1}, {id, Id}, {order, {Order1}}, Doc]};
-            true ->
-                {[{fields, Fields1}, {id, Id}, {order, {Order1}}]}
-            end
-    end,
-    ConvertedHits = lists:map(ConvertHitsFun, Hits),
-    {[{hits, ConvertedHits}]}.
-
-fields_to_json([]) ->
-    [];
-fields_to_json(Fields) when is_list(Fields) ->
-    ConvertFieldsFun = fun
-        (#{name := Name, value := Value}) ->
-            #{value := {_Type, BinValue}} = Value,
-            {[{Name, BinValue}]}
-    end,
-    lists:map(ConvertFieldsFun, Fields).
-
-bookmark_to_json(<<>>) ->
-    [];
-bookmark_to_json(Bookmark) ->
-    #{order := Order} = Bookmark,
-    Bin = term_to_binary(order_to_json(Order)),
-    couch_util:encodeBase64Url(Bin).
-
-order_to_json(Order) ->
-    GetOrderFun = fun (Ord) ->
-        #{value := Val} = Ord,
-        Val
-    end,
-    lists:map(GetOrderFun, Order).
-
-groups_to_json(Db, IncludeDocs, Groups) when is_list(Groups) ->
-    ConvertGroupFun = fun
-        (#{by := By, matches := Matches, hits := Hits}) ->
-            {Hits1} = hits_to_json(Db, IncludeDocs, Hits),
-            {[{by, By}, {matches, Matches} | Hits1]}
-    end,
-    lists:map(ConvertGroupFun, Groups).
+    [{group_limit, parse_positive_int_param("group_limit", Value,
+        "max_group_limit", "200")}].
 
 parse_bool_param(_, Val) when is_boolean(Val) ->
     Val;
@@ -219,4 +146,34 @@ parse_positive_int_param(Name, Val, Prop, Default) ->
         Fmt = "Invalid value for ~s: ~p",
         Msg = io_lib:format(Fmt, [Name, Val]),
         throw({query_parse_error, ?l2b(Msg)})
+    end.
+
+validate_index_query(q, Value, Args) ->
+    Args#index_query_args{q=Value};
+validate_index_query(stale, Value, Args) ->
+    Args#index_query_args{stale=Value};
+validate_index_query(limit, Value, Args) ->
+    Args#index_query_args{limit=Value};
+validate_index_query(group_field, Value,
+        #index_query_args{grouping=Grouping}=Args) ->
+    Args#index_query_args{grouping=Grouping#grouping{by=Value}};
+validate_index_query(include_docs, Value, Args) ->
+    Args#index_query_args{include_docs=Value};
+validate_index_query(include_fields, Value, Args) ->
+    Args#index_query_args{include_fields=Value};
+validate_index_query(bookmark, Value, Args) ->
+    Args#index_query_args{bookmark=Value};
+validate_index_query(sort, Value, Args) ->
+    Args#index_query_args{sort=Value}.
+
+validate_search_restrictions(_Db, _DDoc, Args) ->
+    #index_query_args{
+        q = Query
+    } = Args,
+    case Query of
+        undefined ->
+            Msg1 = <<"Query must include a 'q' or 'query' argument">>,
+            throw({query_parse_error, Msg1});
+        _ ->
+            ok
     end.

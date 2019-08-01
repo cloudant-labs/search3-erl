@@ -1,4 +1,5 @@
-% abstraction layer on top of gRPC generated module
+% abstraction layer on top of grpcbox generated module search_client.erl
+
 -module(search3_rpc).
 
 -include_lib("couch/include/couch_db.hrl").
@@ -23,37 +24,39 @@ get_update_seq(Index) ->
     end.
 
 delete_index(Index, Id, Seq, PurgeSeq) ->
-    Prefix = construct_index_msg(Index),
-    search_client:delete_document(#{index => Prefix, id => Id,
-        seq => #{seq => Seq}, purge_seq => #{seq => PurgeSeq}}).
+    IndexMsg = construct_index_msg(Index),
+    Msg = #{index => IndexMsg, id => Id, seq => #{seq => Seq},
+        purge_seq => #{seq => PurgeSeq}},
+    search_client:delete_document(Msg).
 
 info_index(Index) ->
-    Prefix = construct_index_msg(Index),
-    search_client:info(Prefix).
+    IndexMsg = construct_index_msg(Index),
+    search_client:info(IndexMsg).
 
 update_index(Index, Id, Seq, PurgeSeq, Fields) ->
-    Prefix = construct_index_msg(Index),
+    IndexMsg = construct_index_msg(Index),
     Fields1 = make_fields_map(Fields),
-    Msg = #{index => Prefix, id => Id,
-        seq => #{seq => Seq}, purge_seq => #{seq => PurgeSeq}, fields => Fields1},
+    Msg = #{index => IndexMsg, id => Id, seq => #{seq => Seq},
+        purge_seq => #{seq => PurgeSeq},fields => Fields1},
     search_client:update_document(Msg).
 
 search_index(Index, QueryArgs) ->
     #index_query_args{grouping = Grouping} = QueryArgs,
-    Prefix = construct_index_msg(Index),
+    IndexMsg = construct_index_msg(Index),
     case Grouping#grouping.by of
         nil ->
-            Msg = construct_search_msg(Prefix, QueryArgs),
+            Msg = construct_search_msg(IndexMsg, QueryArgs),
             couch_log:notice("Msg search ~p", [Msg]),
             search_client:search(Msg);
         _ ->
-            Msg2 = construct_group_msg(Prefix, QueryArgs),
-            search_client:group_search(Msg2)
+            GroupMsg = construct_group_msg(IndexMsg, QueryArgs),
+            search_client:group_search(GroupMsg)
     end.
 
 %% Internal
 
-construct_index_msg(#index{dbname = DbName, sig = Signature, analyzer = <<"standard">>}) ->
+construct_index_msg(#index{dbname = DbName, sig = Signature,
+        analyzer = <<"standard">>}) ->
     Prefix= <<DbName/binary, Signature/binary>>,
     #{prefix => Prefix};
 construct_index_msg(#index{dbname = DbName, sig = Signature,
@@ -66,9 +69,7 @@ construct_index_msg(#index{dbname = DbName, sig = Signature,
     case construct_analyzer_spec(Analyzer) of
         #{name := <<"perfield">>, stopwords := Stopwords} ->
             Fields = construct_per_fields(Analyzer),
-            couch_log:notice("Fields ~p ", [Fields]),
             Default = construct_default(Analyzer, Stopwords),
-            couch_log:notice("Default ~p ", [Fields]),
             #{prefix => Prefix, default => Default, per_field => Fields};
         AnalyzerSpec ->
             couch_log:notice("AnalyzerSpec ~p ", [AnalyzerSpec]),
@@ -111,7 +112,6 @@ construct_default(Analyzer, Stopwords) ->
     #{name => Default, stopwords => Stopwords}.
 
 make_fields_map(Fields) when is_list(Fields) ->
-    % need to figure what the third element holds and if we need to hold it
     FieldsMapFun = fun
         ({Name, Value, {Options}}) when is_binary(Value) ->
             M1 = #{name => Name, value => #{value => {string, binary_to_list(Value)}}},
@@ -147,19 +147,9 @@ construct_search_msg(Prefix, #index_query_args{}=QueryArgs) ->
         index => Prefix,
         query => Query1,
         limit => Limit,
-        % TODO: test later
         stale => Stale,
         sort => SortArg
-        % this even an option anymore?
-        % partition => Partition
-        % Test these individually
-        % counts => Counts
-        % ranges => Ranges
-        % drilldown => DrillDown,
-        % include_fields => IncludeFields
     },
-
-    % Need to figure out the actual default value for Bookmark
     case construct_bookmark_msg(Bookmark) of
         #{} -> ok;
         Bookmark1 -> maps:put(bookmark, Bookmark1, Msg)
@@ -200,13 +190,13 @@ construct_sort_msg(SortArg) when is_list(SortArg) ->
 construct_sort_msg(_) ->
     #{}.
 
+% the default value would be us starting at the beginning
+construct_bookmark_msg(nil) ->
+    #{};
 construct_bookmark_msg(Bookmark) when is_binary(Bookmark) ->
     Unpacked = binary_to_term(couch_util:decodeBase64Url(Bookmark)),
     Float = lists:nth(1, Unpacked),
     Int = lists:nth(2, Unpacked),
     #{order => [#{value => Float}, #{value => Int}]};
-% the default value would be us starting at the beginning
-construct_bookmark_msg(nil) ->
-    #{};
 construct_bookmark_msg(_) ->
     throw({bad_request, "Invalid bookmark parameter supplied"}).
