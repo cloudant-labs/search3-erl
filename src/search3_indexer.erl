@@ -65,15 +65,18 @@ init() ->
 update(#{} = Db, State) ->
     try
         Index = maps:get(index, State),
-        Seq = search3_rpc:get_update_seq(Index),
+        {InitSession, Seq} = search3_rpc:get_update_seq(Index),
         Proc = get_os_process(Index#index.def_lang),
+        % Start of a new session
+        Index1 = Index#index{session=InitSession},
         NewState = State#{
             search_seq => Seq,
             last_seq => Seq,
-            proc => Proc
+            proc => Proc,
+            index => Index1
         },
         try
-            true = proc_prompt(Proc, [<<"add_fun">>, Index#index.def]),
+            true = proc_prompt(Proc, [<<"add_fun">>, Index1#index.def]),
             update_int(Db, NewState)
         after
             ret_os_process(Proc)
@@ -85,7 +88,7 @@ update(#{} = Db, State) ->
     end.
 
 update_int(#{} = Db, State) ->
-    State3 = fabric2_fdb:transactional(Db, fun(TxDb) ->
+    State4 = fabric2_fdb:transactional(Db, fun(TxDb) ->
         State1 = maps:put(tx_db, TxDb, State),
         {ok, State2} = fold_changes(State1),
         #{
@@ -100,14 +103,26 @@ update_int(#{} = Db, State) ->
         % 1) purge_seq is empty for now, subsequent releases will support this
         % 2) We are indexing inside a transaction, which has a timeout of 5s.
         % This can potentially be a problem for large documents. We should
-        % revisit this design later.  
-        index_docs(Index, Proc, LastSeq, <<>>, DocAcc),
+        % revisit this design later.
+        Session = try
+             index_docs(Index, Proc, LastSeq, <<>>, DocAcc)
+        catch error:session_mismatch ->
+            % if there is a session mismatch, we just finish this job and
+            % restart it again
+            report_progress(State2, finished),
+            exit(normal)
+        end,
+
+        % Update the session after each update
+        Index1 = Index#index{session = Session},
+        State3 = maps:put(index, Index1, State2),
+
         case Count < Limit of
             true ->
-                report_progress(State2, finished),
+                report_progress(State3, finished),
                 finished;
             false ->
-                report_progress(State2, update),
+                report_progress(State3, update),
                 State2#{
                     tx_db := undefined,
                     count := 0,
@@ -118,13 +133,13 @@ update_int(#{} = Db, State) ->
                 }
         end
     end),
-    case State3 of
+    case State4 of
         finished ->
             % should we ret_os_process(Proc) here? or in the after clause
             % in update/2?
             ok;
         _ ->
-            update_int(Db, State3)
+            update_int(Db, State4)
     end.
 
 fold_changes(State) ->
@@ -172,16 +187,17 @@ load_changes(Change, Acc) ->
     {ok, Acc1}.
 
 index_docs(Index, Proc, Seq, PurgeSeq, Docs) ->
+    InitSession = Index#index.session,
     DocIndexerFun = fun
-        (#{deleted := true, id:= Id}) ->
+        (#{deleted := true, id:= Id}, _) ->
             search3_rpc:delete_index(Index, Id, Seq, PurgeSeq);
-        (Change) ->
+        (Change, _) ->
             #{doc := Doc, id:= Id} = Change,
             Fields = extract_fields(Proc, Doc),
             search3_rpc:update_index(Index, Id, Seq, PurgeSeq, Fields)
     end,
-    lists:foreach(DocIndexerFun, Docs),
-    ok.
+    {Session, _} = lists:foldl(DocIndexerFun, {InitSession, Seq}, Docs),
+    Session.
 
 extract_fields(Proc, Doc) ->
     Json = couch_doc:to_json_obj(Doc, []),
@@ -193,8 +209,11 @@ report_progress(State, UpdateType) ->
         tx_db := TxDb,
         job := Job,
         job_data := JobData,
-        last_seq := LastSeq
+        last_seq := LastSeq,
+        index := Index
     } = State,
+
+    Session = Index#index.session,
 
     #{
         <<"db_name">> := DbName,
@@ -210,7 +229,8 @@ report_progress(State, UpdateType) ->
         <<"ddoc_id">> => DDocId,
         <<"name">> => IndexName,
         <<"sig">> => Sig,
-        <<"search_seq">> => LastSeq
+        <<"search_seq">> => LastSeq,
+        <<"session">> => Session
     },
 
     case UpdateType of

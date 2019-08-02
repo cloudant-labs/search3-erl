@@ -8,7 +8,8 @@
     def,
     def_lang,
     name,
-    sig=nil
+    sig=nil,
+    session = <<>>
 }).
 
 -record(grouping, {

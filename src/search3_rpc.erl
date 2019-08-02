@@ -14,31 +14,35 @@
     ]).
 
 get_update_seq(Index) ->
-    {ok, Response, _Headers} = info_index(Index),
-    #{
-        committed_seq := CommittedSeq
-    } = Response,
-    case CommittedSeq of
-        <<>> -> 0;
-        Seq -> Seq
-    end.
+    {Session, Resp} = info_index(Index),
+    PendingSeq = maps:get(pending_seq, Resp, <<>>),
+    CommittedSeq = maps:get(committed_seq, Resp, <<>>),
+    UpdateSeq = case {PendingSeq, CommittedSeq} of
+        {<<>>, <<>>} -> 0;
+        {<<>>, C} -> C;
+        {P, _} -> P
+    end,
+    {Session, UpdateSeq}.
 
-delete_index(Index, Id, Seq, PurgeSeq) ->
+delete_index(#index{session = Session} = Index, Id, Seq, PurgeSeq) ->
     IndexMsg = construct_index_msg(Index),
     Msg = #{index => IndexMsg, id => Id, seq => #{seq => Seq},
         purge_seq => #{seq => PurgeSeq}},
-    search_client:delete_document(Msg).
+    Resp = search_client:delete_document(Msg),
+    search3_response:handle_response(Resp, Session).
 
-info_index(Index) ->
+info_index(#index{session = Session} = Index) ->
     IndexMsg = construct_index_msg(Index),
-    search_client:info(IndexMsg).
+    Resp = search_client:info(IndexMsg),
+    search3_response:handle_response(Resp, Session).
 
-update_index(Index, Id, Seq, PurgeSeq, Fields) ->
+update_index(#index{session = Session} = Index, Id, Seq, PurgeSeq, Fields) ->
     IndexMsg = construct_index_msg(Index),
     Fields1 = make_fields_map(Fields),
     Msg = #{index => IndexMsg, id => Id, seq => #{seq => Seq},
         purge_seq => #{seq => PurgeSeq},fields => Fields1},
-    search_client:update_document(Msg).
+    Resp = search_client:update_document(Msg),
+    search3_response:handle_response(Resp, Session).
 
 search_index(Index, QueryArgs) ->
     #index_query_args{grouping = Grouping} = QueryArgs,
@@ -46,7 +50,6 @@ search_index(Index, QueryArgs) ->
     case Grouping#grouping.by of
         nil ->
             Msg = construct_search_msg(IndexMsg, QueryArgs),
-            couch_log:notice("Msg search ~p", [Msg]),
             search_client:search(Msg);
         _ ->
             GroupMsg = construct_group_msg(IndexMsg, QueryArgs),
@@ -56,24 +59,24 @@ search_index(Index, QueryArgs) ->
 %% Internal
 
 construct_index_msg(#index{dbname = DbName, sig = Signature,
-        analyzer = <<"standard">>}) ->
+        analyzer = <<"standard">>, session = Session}) ->
     Prefix= <<DbName/binary, Signature/binary>>,
-    #{prefix => Prefix};
+    #{prefix => Prefix, session => Session};
 construct_index_msg(#index{dbname = DbName, sig = Signature,
-        analyzer = Analyzer}) when is_binary(Analyzer) ->
+        analyzer = Analyzer, session = Session}) when is_binary(Analyzer) ->
     Prefix= <<DbName/binary, Signature/binary>>,
-    #{prefix => Prefix, default => #{name => Analyzer}};
+    #{prefix => Prefix, session => Session, default => #{name => Analyzer}};
 construct_index_msg(#index{dbname = DbName, sig = Signature,
-        analyzer = {Analyzer}}) ->
+        analyzer = {Analyzer}, session= Session}) ->
     Prefix= <<DbName/binary, Signature/binary>>,
     case construct_analyzer_spec(Analyzer) of
         #{name := <<"perfield">>, stopwords := Stopwords} ->
             Fields = construct_per_fields(Analyzer),
             Default = construct_default(Analyzer, Stopwords),
-            #{prefix => Prefix, default => Default, per_field => Fields};
+            #{prefix => Prefix, session => Session,
+                default => Default, per_field => Fields};
         AnalyzerSpec ->
-            couch_log:notice("AnalyzerSpec ~p ", [AnalyzerSpec]),
-            #{prefix => Prefix, default => AnalyzerSpec}
+            #{prefix => Prefix, session => Session, default => AnalyzerSpec}
     end.
 
 construct_analyzer_spec(Analyzer) ->

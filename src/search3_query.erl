@@ -13,38 +13,28 @@ run_query(Db, DDoc, IndexName, QueryArgs) ->
     run_query(Db, Index1, QueryArgs).
 
 run_query(Db, Index, QueryArgs) ->
-    % TODO:The UpdateSeq here returned supposedly means the index us up to date.
-    % However there is a scenario were a pod dies at indexing time and the
-    % CommitedSeq is behind the UpdateSeq. In this case we need to re-run the
-    % indexer and search requests again. 
-    maybe_build_index(Db, Index),
-    handle_response(search3_rpc:search_index(Index, QueryArgs)).
+    % A scenario exists wjere a pod dies at indexing time and the
+    % CommitedSeq is behind the UpdateSeq. This can be detected when the
+    % Session id after indexing is different than the session id of a query.
+    Session = maybe_build_index(Db, Index),
+    try
+        Response = search3_rpc:search_index(Index, QueryArgs),
+        search3_response:handle_search_response(Response, Session)
+    catch error:session_mismatch ->
+        run_query(Db, Index, QueryArgs)
+    end.
 
 maybe_build_index(Db, Index) ->
-    {Action, WaitSeq} = fabric2_fdb:transactional(Db, fun(TxDb) ->
+    {Action, Session, WaitSeq} = fabric2_fdb:transactional(Db, fun(TxDb) ->
         DbSeq = fabric2_db:get_update_seq(TxDb),
-        SearchSeq = search3_rpc:get_update_seq(Index),
+        {UpdateSession, SearchSeq} = search3_rpc:get_update_seq(Index),
         case DbSeq == SearchSeq of
-            true -> {ready, DbSeq};
-            false -> {build, DbSeq}
+            true -> {ready, UpdateSession, DbSeq};
+            false -> {build, UpdateSession, DbSeq}
         end
     end),
-    if Action == ready -> ok; true ->
+    % This returns a Session Id. It either returns the session from the last
+    % get_update_seq, or it returns the seq from the building of the index.
+    if Action == ready -> Session; true ->
         search3_jobs:build_search(Db, Index, WaitSeq)
-    end,
-    WaitSeq.
-
-handle_response({ok, #{groups := Groups, matches := Matches}, _}) ->
-    {Matches, Groups};
-handle_response({ok, Response, _Header}) ->
-    #{
-        matches := Matches,
-        hits := Hits
-    } = Response,
-    Bookmark = maps:get(bookmark, Response, <<>>),
-    {Bookmark, Matches, Hits};
-% sort error
-handle_response({error, {<<"9">>, Msg}}) ->
-    throw({bad_request, Msg});
-handle_response({error, {Code, Reason}}) ->
-    erlang:error({Code, Reason}).
+    end.

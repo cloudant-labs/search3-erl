@@ -14,7 +14,7 @@ set_timeout() ->
 build_search(TxDb, Index, UpdateSeq) ->
     {ok, JobId} = build_search_async(TxDb, Index),
     case wait_for_job(JobId, UpdateSeq) of
-        ok -> ok;
+        {ok, Session} -> Session;
         retry -> build_search(TxDb, Index, UpdateSeq)
     end.
 
@@ -30,8 +30,9 @@ wait_for_job(JobId, UpdateSeq) ->
             wait_for_job(JobId, Subscription, UpdateSeq);
         {ok, finished, Data} ->
             case Data of
-                #{<<"search_seq">> := SearchSeq} when SearchSeq >= UpdateSeq ->
-                    ok;
+                #{<<"search_seq">> := SearchSeq, <<"session">> := Session}
+                        when SearchSeq >= UpdateSeq ->
+                    {ok, Session};
                 _ ->
                     retry
             end
@@ -43,13 +44,15 @@ wait_for_job(JobId, Subscription, UpdateSeq) ->
             erlang:error(Error);
         {finished, #{<<"error">> := Error, <<"reason">> := Reason}} ->
             erlang:error({binary_to_atom(Error, latin1), Reason});
-        {finished, #{<<"search_seq">> := SearchSeq}} when SearchSeq >= UpdateSeq ->
-            ok;
+        {finished, #{<<"search_seq">> := SearchSeq, <<"session">> := Session}}
+                when SearchSeq >= UpdateSeq ->
+            {ok, Session};
         {finished, _} ->
             wait_for_job(JobId, UpdateSeq);
-        {_State, #{<<"search_seq">> := SearchSeq}} when SearchSeq >= UpdateSeq ->
+        {_State, #{<<"search_seq">> := SearchSeq, <<"session">> := Session}}
+                when SearchSeq >= UpdateSeq ->
             couch_jobs:unsubscribe(Subscription),
-            ok;
+            {ok, Session};
         {_, _} ->
             wait_for_job(JobId, Subscription, UpdateSeq)
     end.
