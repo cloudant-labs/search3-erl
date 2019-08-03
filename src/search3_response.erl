@@ -86,7 +86,9 @@ handle_error_response({error, {<<"9">>, Msg}}) ->
 handle_error_response({error, {<<"3">>, <<"session mismatch">>}}) ->
     throw(session_mismatch);
 handle_error_response({error, {Code, Reason}}) ->
-    erlang:error({Code, Reason}).
+    erlang:error({Code, Reason});
+handle_error_response(Error) ->
+    erlang:error(Error).
 
 % Session Verification
 verify_same_session(<<>>, Received) ->
