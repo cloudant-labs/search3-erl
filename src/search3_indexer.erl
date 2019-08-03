@@ -104,33 +104,33 @@ update_int(#{} = Db, State) ->
         % 2) We are indexing inside a transaction, which has a timeout of 5s.
         % This can potentially be a problem for large documents. We should
         % revisit this design later.
-        Session = try
-             index_docs(Index, Proc, LastSeq, <<>>, DocAcc)
+        try
+            Session = index_docs(Index, Proc, LastSeq, <<>>, DocAcc),
+             % Update the session after each update
+            Index1 = Index#index{session = Session},
+            State3 = maps:put(index, Index1, State2),
+            case Count < Limit of
+                true ->
+                    % this should be only called once afer all docs are index
+                    search3_rpc:set_update_seq(Index1, LastSeq, <<>>),
+                    report_progress(State3, finished),
+                    finished;
+                false ->
+                    report_progress(State3, update),
+                    State2#{
+                        tx_db := undefined,
+                        count := 0,
+                        doc_acc := [],
+                        search_seq => LastSeq,
+                        % make sure this reset here is correct
+                        last_seq := 0
+                    }
+           end
         catch error:session_mismatch ->
             % if there is a session mismatch, we just finish this job and
             % restart it again
             report_progress(State2, finished),
             exit(normal)
-        end,
-
-        % Update the session after each update
-        Index1 = Index#index{session = Session},
-        State3 = maps:put(index, Index1, State2),
-
-        case Count < Limit of
-            true ->
-                report_progress(State3, finished),
-                finished;
-            false ->
-                report_progress(State3, update),
-                State2#{
-                    tx_db := undefined,
-                    count := 0,
-                    doc_acc := [],
-                    search_seq => LastSeq,
-                    % make sure this reset here is correct
-                    last_seq := 0
-                }
         end
     end),
     case State4 of
