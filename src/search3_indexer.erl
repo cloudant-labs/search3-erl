@@ -129,8 +129,7 @@ update_int(#{} = Db, State) ->
         catch error:session_mismatch ->
             % if there is a session mismatch, we just finish this job and
             % restart it again
-            report_progress(State2, finished),
-            exit(normal)
+            report_progress(State2, finished)
         end
     end),
     case State4 of
