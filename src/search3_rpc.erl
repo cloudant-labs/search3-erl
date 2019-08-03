@@ -10,19 +10,28 @@
     delete_index/4,
     info_index/1,
     update_index/5,
-    search_index/2
+    search_index/2,
+    set_update_seq/3
     ]).
 
 get_update_seq(Index) ->
     {Session, Resp} = info_index(Index),
     PendingSeq = maps:get(pending_seq, Resp, <<>>),
     CommittedSeq = maps:get(committed_seq, Resp, <<>>),
+
     UpdateSeq = case {PendingSeq, CommittedSeq} of
         {<<>>, <<>>} -> 0;
-        {<<>>, C} -> C;
-        {P, _} -> P
+        {<<>>, C} when is_map(C) -> maps:get(seq, C);
+        {P, _} when is_map(P) -> maps:get(seq, P);
+        {_, _} -> 0
     end,
     {Session, UpdateSeq}.
+
+set_update_seq(#index{session = Session} = Index, Seq, _PurgeSeq) ->
+    IndexMsg = construct_index_msg(Index),
+    Msg = #{index => IndexMsg, seq => #{seq => Seq}},
+    Resp = search_client:set_update_sequence(Msg),
+    search3_response:handle_response(Resp, Session).
 
 delete_index(#index{session = Session} = Index, Id, Seq, PurgeSeq) ->
     IndexMsg = construct_index_msg(Index),
