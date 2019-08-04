@@ -167,11 +167,11 @@ construct_search_msg(Prefix, #index_query_args{}=QueryArgs) ->
         stale => Stale,
         sort => SortArg
     },
-    case construct_bookmark_msg(Bookmark) of
-        #{} -> ok;
+    Msg2 = case construct_bookmark_msg(Bookmark) of
+        nil -> Msg;
         Bookmark1 -> maps:put(bookmark, Bookmark1, Msg)
     end,
-    Msg.
+    Msg2.
 
 construct_group_msg(Prefix, #index_query_args{}=QueryArgs) ->
     #index_query_args{
@@ -209,7 +209,7 @@ construct_sort_msg(_) ->
 
 % the default value would be us starting at the beginning
 construct_bookmark_msg(nil) ->
-    #{};
+    nil;
 construct_bookmark_msg(Bookmark) when is_binary(Bookmark) ->
     Unpacked = binary_to_term(couch_util:decodeBase64Url(Bookmark)),
     Float = lists:nth(1, Unpacked),
