@@ -163,26 +163,18 @@ load_changes(Change, Acc) ->
         sequence := LastSeq,
         deleted := Deleted
     } = Change,
-    Acc1 = case Id of
-        <<"_design/", _/binary>> ->
-            maps:merge(Acc, #{
-                count => Count + 1,
-                last_seq => LastSeq
-                });
-        _ ->
-            Doc = if Deleted -> []; true ->
-                case fabric2_db:open_doc(TxDb, Id) of
-                    {ok, Doc0} -> Doc0;
-                    {not_found, _} -> []
-                end
-            end,
-            Change1 = maps:put(doc, Doc, Change),
-            maps:merge(Acc, #{
-                doc_acc => DocAcc ++ [Change1],
-                count => Count + 1,
-                last_seq => LastSeq
-            })
+    Doc = if Deleted -> []; true ->
+        case fabric2_db:open_doc(TxDb, Id) of
+            {ok, Doc0} -> Doc0;
+            {not_found, _} -> []
+        end
     end,
+    Change1 = maps:put(doc, Doc, Change),
+    Acc1 = maps:merge(Acc, #{
+        doc_acc => DocAcc ++ [Change1],
+        count => Count + 1,
+        last_seq => LastSeq
+    }),
     {ok, Acc1}.
 
 index_docs(Index, Proc, Seq, PurgeSeq, Docs) ->
