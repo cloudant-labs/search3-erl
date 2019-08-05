@@ -171,6 +171,7 @@ construct_search_msg(Prefix, #index_query_args{}=QueryArgs) ->
         nil -> Msg;
         Bookmark1 -> maps:put(bookmark, Bookmark1, Msg)
     end,
+
     Msg2.
 
 construct_group_msg(Prefix, #index_query_args{}=QueryArgs) ->
@@ -210,8 +211,14 @@ construct_sort_msg(_) ->
 % the default value would be us starting at the beginning
 construct_bookmark_msg(nil) ->
     nil;
+construct_bookmark_msg(<<>>) ->
+    throw({bad_request, "Invalid bookmark parameter supplied"});
 construct_bookmark_msg(Bookmark) when is_binary(Bookmark) ->
-    Unpacked = binary_to_term(couch_util:decodeBase64Url(Bookmark)),
+    Unpacked =  try binary_to_term(couch_util:decodeBase64Url(Bookmark)) of
+        Unpacked0 -> Unpacked0
+    catch _:_ ->
+        throw({bad_request, "Invalid bookmark parameter supplied"})
+    end,
     Float = lists:nth(1, Unpacked),
     Int = lists:nth(2, Unpacked),
     #{order => [#{value => Float}, #{value => Int}]};
