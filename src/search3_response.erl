@@ -16,13 +16,12 @@ hits_to_json(Db, IncludeDocs, Hits) ->
             Fields1 = fields_to_json(Fields),
             if IncludeDocs ->
                 Doc = search3_util:get_doc(Db, Id),
-                {[{fields, Fields1}, {id, Id}, {order, {Order1}}, Doc]};
+                {[{fields, {Fields1}}, {id, Id}, {order, Order1}, Doc]};
             true ->
-                {[{fields, Fields1}, {id, Id}, {order, {Order1}}]}
+                {[{fields, {Fields1}}, {id, Id}, {order, Order1}]}
             end
     end,
-    ConvertedHits = lists:map(ConvertHitsFun, Hits),
-    {[{hits, ConvertedHits}]}.
+    lists:map(ConvertHitsFun, Hits).
 
 groups_to_json(Db, IncludeDocs, Groups) when is_list(Groups) ->
     ConvertGroupFun = fun
@@ -38,7 +37,7 @@ fields_to_json(Fields) when is_list(Fields) ->
     ConvertFieldsFun = fun
         (#{name := Name, value := Value}) ->
             #{value := {_Type, BinValue}} = Value,
-            {[{Name, BinValue}]}
+            {Name, BinValue}
     end,
     lists:map(ConvertFieldsFun, Fields).
 
@@ -46,15 +45,24 @@ bookmark_to_json(<<>>) ->
     [];
 bookmark_to_json(Bookmark) ->
     #{order := Order} = Bookmark,
-    Bin = term_to_binary(order_to_json(Order)),
+    Bin = term_to_binary(extract_order(Order)),
     couch_util:encodeBase64Url(Bin).
 
-order_to_json(Order) ->
-    GetOrderFun = fun (Ord) ->
+extract_order(Order) ->
+    ExtractOrderFun = fun (Ord) ->
         #{value := Val} = Ord,
         Val
     end,
-    lists:map(GetOrderFun, Order).
+    lists:map(ExtractOrderFun, Order).
+
+order_to_json(Order) ->
+    OrderFun = fun (Ord) ->
+        #{value := Val} = Ord,
+        {_Type, Val1} = Val,
+        Val1
+    end,
+    lists:map(OrderFun, Order).
+
 
 handle_search_response({ok, #{groups := Groups, matches := Matches,
         session := Session}, _}, BuildSession) ->
