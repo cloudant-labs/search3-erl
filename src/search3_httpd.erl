@@ -79,6 +79,8 @@ parse_index_param("sort", Value) ->
     [{sort, ?JSON_DECODE(Value)}];
 parse_index_param("limit", Value) ->
     [{limit, ?JSON_DECODE(Value)}];
+parse_index_param("include_fields", Value) ->
+    [{include_fields, ?JSON_DECODE(Value)}];
 parse_index_param("include_docs", Value) ->
     [{include_docs, parse_bool_param("include_docs", Value)}];
 parse_index_param("group_field", Value) ->
@@ -99,6 +101,8 @@ parse_json_index_param(<<"sort">>, Value) ->
     [{sort, Value}];
 parse_json_index_param(<<"limit">>, Value) ->
     [{limit, Value}];
+parse_json_index_param(<<"include_fields">>, Value) ->
+    [{include_fields, Value}];
 parse_json_index_param(<<"include_docs">>, Value) when is_boolean(Value) ->
     [{include_docs, Value}];
 parse_json_index_param(<<"group_field">>, Value) ->

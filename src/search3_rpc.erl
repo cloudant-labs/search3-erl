@@ -126,10 +126,9 @@ construct_default(Analyzer, Stopwords) ->
 make_fields_map(Fields) when is_list(Fields) ->
     FieldsMapFun = fun
         ({Name, Value, {Options}}) ->
-            M1 = #{name => Name, value => fields_value(Value)},
-            Fields1 = options_list(Options),
-            M2 = maps:from_list(Fields1),
-            maps:merge(M1, M2)
+            Applied = apply_options(#{name => Name, value => fields_value(Value)},
+                Options),
+            Applied
     end,
     lists:map(FieldsMapFun, Fields).
 
@@ -140,10 +139,22 @@ fields_value(Value) when is_number(Value) ->
 fields_value(Value) when is_boolean(Value) ->
     #{value => {bool, Value}}.
 
-% This function is required we need to convert <<"stored">>, <<"facet">>,
+% This function is required we need to convert <<"store">>, <<"facet">>,
 % <<"analzyed">> into atoms for grpc.
-options_list(Options) when is_list(Options) ->
-    [{list_to_existing_atom(?b2l(Opt)), Val} || {Opt, Val} <- Options].
+apply_options(Field, []) ->
+    Field;
+apply_options(Field, [{<<"analyzed">>, Value} | RestOptions]) ->
+    apply_options(maps:put(analyzed, Value, Field), RestOptions);
+apply_options(Field, [{<<"store">>, <<"yes">>} | RestOptions]) ->
+    apply_options(maps:put(store, true, Field), RestOptions);
+apply_options(Field, [{<<"store">>, <<"no">>} | RestOptions]) ->
+    apply_options(maps:put(store, false, Field), RestOptions);
+apply_options(Field, [{<<"store">>, Value} | RestOptions]) ->
+    apply_options(maps:put(store, Value, Field), RestOptions);
+apply_options(Field, [{<<"facet">>, Value} | RestOptions]) ->
+    apply_options(maps:put(facet, Value, Field), RestOptions);
+apply_options(Field, [{_, _} | RestOptions]) ->
+    apply_options(Field, RestOptions).
 
 construct_search_msg(Prefix, #index_query_args{}=QueryArgs) ->
     #index_query_args{
@@ -160,12 +171,14 @@ construct_search_msg(Prefix, #index_query_args{}=QueryArgs) ->
     } = QueryArgs,
     Query1 = binary_to_list(Query),
     SortArg = construct_sort_msg(Sort),
+    IncludeFields1 = construct_include_fields_msg(IncludeFields),
     Msg = #{
         index => Prefix,
         query => Query1,
         limit => Limit,
         stale => Stale,
-        sort => SortArg
+        sort => SortArg,
+        include_fields => IncludeFields1
     },
     Msg2 = case construct_bookmark_msg(Bookmark) of
         nil -> Msg;
@@ -173,6 +186,14 @@ construct_search_msg(Prefix, #index_query_args{}=QueryArgs) ->
     end,
 
     Msg2.
+
+% Need to add a check at httpd layer to make sure each field is a string
+construct_include_fields_msg(nil) ->
+    [];
+construct_include_fields_msg(IncludeFields) when is_binary(IncludeFields) ->
+    [IncludeFields];
+construct_include_fields_msg(IncludeFields) when is_list(IncludeFields) ->
+    IncludeFields.
 
 construct_group_msg(Prefix, #index_query_args{}=QueryArgs) ->
     #index_query_args{
