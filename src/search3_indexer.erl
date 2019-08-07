@@ -43,13 +43,13 @@ init() ->
 
     if  HexSig == JobSig -> ok; true ->
         couch_jobs:finish(undefined, Job, JobData#{
-            error => sig_changed,
-            reason => <<"Design document was modified">>
+            <<"error">> => <<"sig_changed">>,
+            <<"reason">> => <<"Design document was modified">>
         }),
         exit(normal)
     end,
     State = #{
-        txdb => undefined,
+        tx_db => undefined,
         search_seq => undefined,
         count => 0,
         limit => config:get_integer("search3", "change_limit", 100),
@@ -89,7 +89,7 @@ update(#{} = Db, State) ->
 
 update_int(#{} = Db, State) ->
     State4 = fabric2_fdb:transactional(Db, fun(TxDb) ->
-        State1 = maps:put(tx_db, TxDb, State),
+        State1 = State#{tx_db := TxDb},
         {ok, State2} = fold_changes(State1),
         #{
             count := Count,
@@ -170,11 +170,11 @@ load_changes(Change, Acc) ->
         end
     end,
     Change1 = maps:put(doc, Doc, Change),
-    Acc1 = maps:merge(Acc, #{
-        doc_acc => DocAcc ++ [Change1],
-        count => Count + 1,
-        last_seq => LastSeq
-    }),
+    Acc1 = Acc#{
+        doc_acc := DocAcc ++ [Change1],
+        count := Count +1,
+        last_seq := LastSeq
+    },
     {ok, Acc1}.
 
 index_docs(Index, Proc, Seq, PurgeSeq, Docs) ->
@@ -182,8 +182,7 @@ index_docs(Index, Proc, Seq, PurgeSeq, Docs) ->
     DocIndexerFun = fun
         (#{deleted := true, id:= Id}, _) ->
             search3_rpc:delete_index(Index, Id, Seq, PurgeSeq);
-        (Change, _) ->
-            #{doc := Doc, id:= Id} = Change,
+        (#{deleted := false, doc := Doc, id:= Id}, _) ->
             Fields = extract_fields(Proc, Doc),
             search3_rpc:update_index(Index, Id, Seq, PurgeSeq, Fields)
     end,
