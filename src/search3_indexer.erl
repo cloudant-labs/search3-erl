@@ -197,7 +197,7 @@ extract_fields(Proc, Doc) ->
 report_progress(State, UpdateType) ->
     #{
         tx_db := TxDb,
-        job := Job,
+        job := Job1,
         job_data := JobData,
         last_seq := LastSeq,
         index := Index
@@ -225,7 +225,19 @@ report_progress(State, UpdateType) ->
 
     case UpdateType of
         update ->
-            couch_jobs:update(TxDb, Job, NewData);
+            case couch_jobs:update(TxDb, Job1, NewData) of
+                {ok, Job2} ->
+                    State#{job := Job2};
+                {error, halt} ->
+                    couch_log:error("~s job halted :: ~w", [?MODULE, Job1]),
+                    exit(normal)
+            end;
         finished ->
-            couch_jobs:finish(TxDb, Job, NewData)
+            case couch_jobs:finish(TxDb, Job1, NewData) of
+                ok ->
+                    State;
+                {error, halt} ->
+                    couch_log:error("~s job halted :: ~w", [?MODULE, Job1]),
+                    exit(normal)
+            end
     end.
