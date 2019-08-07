@@ -29,14 +29,21 @@ get_update_seq(Index) ->
 
 set_update_seq(#index{session = Session} = Index, Seq, _PurgeSeq) ->
     IndexMsg = construct_index_msg(Index),
-    Msg = #{index => IndexMsg, seq => #{seq => Seq}},
+    Msg = #{
+        index => IndexMsg,
+        seq => #{seq => Seq}
+    },
     Resp = search_client:set_update_sequence(Msg),
     search3_response:handle_response(Resp, Session).
 
 delete_index(#index{session = Session} = Index, Id, Seq, PurgeSeq) ->
     IndexMsg = construct_index_msg(Index),
-    Msg = #{index => IndexMsg, id => Id, seq => #{seq => Seq},
-        purge_seq => #{seq => PurgeSeq}},
+    Msg = #{
+        index => IndexMsg,
+        id => Id,
+        seq => #{seq => Seq},
+        purge_seq => #{seq => PurgeSeq}
+    },
     Resp = search_client:delete_document(Msg),
     search3_response:handle_response(Resp, Session).
 
@@ -48,8 +55,13 @@ info_index(#index{session = Session} = Index) ->
 update_index(#index{session = Session} = Index, Id, Seq, PurgeSeq, Fields) ->
     IndexMsg = construct_index_msg(Index),
     Fields1 = make_fields_map(Fields),
-    Msg = #{index => IndexMsg, id => Id, seq => #{seq => Seq},
-        purge_seq => #{seq => PurgeSeq},fields => Fields1},
+    Msg = #{
+        index => IndexMsg,
+        id => Id,
+        seq => #{seq => Seq},
+        purge_seq => #{seq => PurgeSeq},
+        fields => Fields1
+    },
     Resp = search_client:update_document(Msg),
     search3_response:handle_response(Resp, Session).
 
