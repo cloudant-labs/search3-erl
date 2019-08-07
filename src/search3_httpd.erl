@@ -158,9 +158,12 @@ validate_index_query(stale, Value, Args) ->
     Args#index_query_args{stale=Value};
 validate_index_query(limit, Value, Args) ->
     Args#index_query_args{limit=Value};
-validate_index_query(group_field, Value,
-        #index_query_args{grouping=Grouping}=Args) ->
-    Args#index_query_args{grouping=Grouping#grouping{by=Value}};
+validate_index_query(group_field, Value, #index_query_args{grouping=Grouping}=Args) ->
+    Args#index_query_args{grouping=Grouping#grouping{by=Value, new_api=true}};
+validate_index_query(group_sort, Value, #index_query_args{grouping=Grouping}=Args) ->
+    Args#index_query_args{grouping=Grouping#grouping{sort=Value}};
+validate_index_query(group_limit, Value, #index_query_args{grouping=Grouping}=Args) ->
+    Args#index_query_args{grouping=Grouping#grouping{limit=Value}};
 validate_index_query(include_docs, Value, Args) ->
     Args#index_query_args{include_docs=Value};
 validate_index_query(include_fields, Value, Args) ->

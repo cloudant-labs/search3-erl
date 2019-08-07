@@ -184,7 +184,6 @@ construct_search_msg(Prefix, #index_query_args{}=QueryArgs) ->
         nil -> Msg;
         Bookmark1 -> maps:put(bookmark, Bookmark1, Msg)
     end,
-
     Msg2.
 
 % Need to add a check at httpd layer to make sure each field is a string
@@ -216,11 +215,12 @@ construct_group_msg(Prefix, #index_query_args{}=QueryArgs) ->
         query => Query1,
         limit => Limit,
         stale => Stale,
-        group_by => GroupBy,
-        group_offset => GroupOffSet,
+        group_by => binary_to_list(GroupBy),
+        % group_offset => GroupOffSet,
         group_limit => GroupLimit,
         group_sort => SortArg
-    }.
+    },
+    Msg.
 
 construct_sort_msg(SortArg) when is_binary(SortArg) ->
     #{fields => [SortArg]};

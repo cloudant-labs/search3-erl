@@ -26,8 +26,8 @@ hits_to_json(Db, IncludeDocs, Hits) ->
 groups_to_json(Db, IncludeDocs, Groups) when is_list(Groups) ->
     ConvertGroupFun = fun
         (#{by := By, matches := Matches, hits := Hits}) ->
-            {Hits1} = hits_to_json(Db, IncludeDocs, Hits),
-            {[{by, By}, {matches, Matches} | Hits1]}
+            Hits1 = hits_to_json(Db, IncludeDocs, Hits),
+            {[{by, By}, {total_rows, Matches}, {rows, Hits1}]}
     end,
     lists:map(ConvertGroupFun, Groups).
 
@@ -56,10 +56,12 @@ extract_order(Order) ->
     lists:map(ExtractOrderFun, Order).
 
 order_to_json(Order) ->
-    OrderFun = fun (Ord) ->
-        #{value := Val} = Ord,
-        {_Type, Val1} = Val,
-        Val1
+    OrderFun = fun
+        (#{value := Val}) ->
+            {_Type, Val1} = Val,
+            Val1;
+        (Ord) when map_size(Ord) == 0 ->
+            null
     end,
     lists:map(OrderFun, Order).
 
