@@ -23,14 +23,14 @@ handle_search_req(#httpd{method=Method, path_parts=[_, _, _, _, IndexName]}=Req
     } = parse_index_params(Req, Db),
     validate_search_restrictions(Db, DDoc, QueryArgs),
     case search3_query:run_query(Db, DDoc, IndexName, QueryArgs) of
-        {Matches, Groups} ->
+        {group_search, Matches, Groups} ->
             GroupsJson = search3_response:groups_to_json(Db, IncludeDocs,
                 Groups),
             send_json(Req, 200, {[
                 {total_rows, Matches},
                 {groups, GroupsJson}
             ]});
-        {Bookmark, Matches, Hits} ->
+        {search, Bookmark, Matches, Hits} ->
             Hits1 = search3_response:hits_to_json(Db, IncludeDocs, Hits),
             Bookmark1 = search3_response:bookmark_to_json(Bookmark),
             send_json(Req, 200, {[

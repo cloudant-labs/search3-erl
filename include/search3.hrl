@@ -43,12 +43,6 @@
     raw_bookmark=false
 }).
 
--record(sortable, {
-    order, % sort order
-    % shard, % originating shard
-    item   % the item itself
-}).
-
 -record(top_docs, {
     update_seq,
     total_hits,

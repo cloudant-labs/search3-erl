@@ -69,7 +69,7 @@ order_to_json(Order) ->
 handle_search_response({ok, #{groups := Groups, matches := Matches,
         session := Session}, _}, BuildSession) ->
     verify_same_session(BuildSession, Session),
-    {Matches, Groups};
+    {group_search, Matches, Groups};
 handle_search_response({ok, Response, _Header}, BuildSession) ->
     #{
         matches := Matches,
@@ -78,7 +78,7 @@ handle_search_response({ok, Response, _Header}, BuildSession) ->
     } = Response,
     verify_same_session(BuildSession, Session),
     Bookmark = maps:get(bookmark, Response, <<>>),
-    {Bookmark, Matches, Hits};
+    {search, Bookmark, Matches, Hits};
 handle_search_response({error, Error}, _) ->
     handle_error_response({error, Error}).
 
@@ -95,6 +95,8 @@ handle_error_response({error, {<<"9">>, Msg}}) ->
     throw({bad_request, Msg});
 handle_error_response({error, {<<"3">>, <<"session mismatch">>}}) ->
     throw(session_mismatch);
+handle_error_response({error, {<<"3">>, Msg}}) ->
+    throw({bad_request, Msg});
 handle_error_response({error, {Code, Reason}}) ->
     erlang:error({Code, Reason});
 handle_error_response(Error) ->
