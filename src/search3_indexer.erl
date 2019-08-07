@@ -88,7 +88,7 @@ update(#{} = Db, State) ->
     end.
 
 update_int(#{} = Db, State) ->
-    State4 = fabric2_fdb:transactional(Db, fun(TxDb) ->
+    State5 = fabric2_fdb:transactional(Db, fun(TxDb) ->
         State1 = State#{tx_db := TxDb},
         {ok, State2} = fold_changes(State1),
         #{
@@ -116,14 +116,12 @@ update_int(#{} = Db, State) ->
                     report_progress(State3, finished),
                     finished;
                 false ->
-                    report_progress(State3, update),
-                    State2#{
+                    State4 = report_progress(State3, update),
+                    State4 #{
                         tx_db := undefined,
                         count := 0,
                         doc_acc := [],
-                        search_seq => LastSeq,
-                        % make sure this reset here is correct
-                        last_seq := 0
+                        search_seq := LastSeq
                     }
            end
         catch error:session_mismatch ->
@@ -132,13 +130,13 @@ update_int(#{} = Db, State) ->
             report_progress(State2, finished)
         end
     end),
-    case State4 of
+    case State5 of
         finished ->
             % should we ret_os_process(Proc) here? or in the after clause
             % in update/2?
             ok;
         _ ->
-            update_int(Db, State4)
+            update_int(Db, State5)
     end.
 
 fold_changes(State) ->
