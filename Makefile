@@ -1,8 +1,8 @@
 compile: src/search_client.erl
-	@rebar3 compile
+	@rebar compile
 
 src/search_client.erl:
-	@rebar3 grpc gen
+	@rebar grpc gen
 
 clean:
 	@rm -rf _build
