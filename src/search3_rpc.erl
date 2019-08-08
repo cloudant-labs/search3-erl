@@ -247,7 +247,7 @@ construct_bookmark_msg(nil) ->
 construct_bookmark_msg(<<>>) ->
     throw({bad_request, "Invalid bookmark parameter supplied"});
 construct_bookmark_msg(Bookmark) when is_binary(Bookmark) ->
-    Unpacked =  try binary_to_term(couch_util:decodeBase64Url(Bookmark)) of
+    Unpacked =  try binary_to_term(couch_util:decodeBase64Url(Bookmark), [safe]) of
         Unpacked0 -> Unpacked0
     catch _:_ ->
         throw({bad_request, "Invalid bookmark parameter supplied"})

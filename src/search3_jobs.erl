@@ -43,7 +43,7 @@ wait_for_job(JobId, Subscription, UpdateSeq) ->
         {error, Error} ->
             erlang:error(Error);
         {finished, #{<<"error">> := Error, <<"reason">> := Reason}} ->
-            erlang:error({binary_to_atom(Error, latin1), Reason});
+            erlang:error({binary_to_existing_atom(Error, latin1), Reason});
         {finished, #{<<"search_seq">> := SearchSeq, <<"session">> := Session}}
                 when SearchSeq >= UpdateSeq ->
             {ok, Session};
