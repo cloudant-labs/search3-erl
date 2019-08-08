@@ -14,7 +14,9 @@ set_timeout() ->
 build_search(TxDb, Index, UpdateSeq) ->
     {ok, JobId} = build_search_async(TxDb, Index),
     case wait_for_job(JobId, UpdateSeq) of
-        {ok, Session} -> Session;
+        {ok, Session} ->
+            ok = couch_jobs:remove(undefined, ?SEARCH_JOB_TYPE, JobId),
+            Session;
         retry -> build_search(TxDb, Index, UpdateSeq)
     end.
 
