@@ -33,7 +33,7 @@ set_update_seq(#index{session = Session} = Index, Seq, _PurgeSeq) ->
         index => IndexMsg,
         seq => #{seq => Seq}
     },
-    Resp = search_client:set_update_sequence(Msg),
+    Resp = search_client:set_update_sequence(Msg, get_channel()),
     search3_response:handle_response(Resp, Session).
 
 delete_index(#index{session = Session} = Index, Id, Seq, PurgeSeq) ->
@@ -44,12 +44,12 @@ delete_index(#index{session = Session} = Index, Id, Seq, PurgeSeq) ->
         seq => #{seq => Seq},
         purge_seq => #{seq => PurgeSeq}
     },
-    Resp = search_client:delete_document(Msg),
+    Resp = search_client:delete_document(Msg, get_channel()),
     search3_response:handle_response(Resp, Session).
 
 info_index(#index{session = Session} = Index) ->
     IndexMsg = construct_index_msg(Index),
-    Resp = search_client:info(IndexMsg),
+    Resp = search_client:info(IndexMsg, get_channel()),
     search3_response:handle_response(Resp, Session).
 
 update_index(#index{session = Session} = Index, Id, Seq, PurgeSeq, Fields) ->
@@ -62,7 +62,7 @@ update_index(#index{session = Session} = Index, Id, Seq, PurgeSeq, Fields) ->
         purge_seq => #{seq => PurgeSeq},
         fields => Fields1
     },
-    Resp = search_client:update_document(Msg),
+    Resp = search_client:update_document(Msg, get_channel()),
     search3_response:handle_response(Resp, Session).
 
 search_index(Index, QueryArgs) ->
@@ -71,10 +71,10 @@ search_index(Index, QueryArgs) ->
     case Grouping#grouping.by of
         nil ->
             Msg = construct_search_msg(IndexMsg, QueryArgs),
-            search_client:search(Msg);
+            search_client:search(Msg, get_channel());
         _ ->
             GroupMsg = construct_group_msg(IndexMsg, QueryArgs),
-            search_client:group_search(GroupMsg)
+            search_client:group_search(GroupMsg, get_channel())
     end.
 
 %% Internal
@@ -257,3 +257,9 @@ construct_bookmark_msg(Bookmark) when is_binary(Bookmark) ->
     #{order => [#{value => Float}, #{value => Int}]};
 construct_bookmark_msg(_) ->
     throw({bad_request, "Invalid bookmark parameter supplied"}).
+
+get_channel() ->
+    case application:get_env(search3, channel_name) of
+        {ok, Channel} -> #{channel => Channel};
+        undefined -> #{channel => default_channel}
+    end.
