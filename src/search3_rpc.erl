@@ -11,7 +11,8 @@
     info_index/1,
     update_index/5,
     search_index/2,
-    set_update_seq/3
+    set_update_seq/3,
+    get_channel/0
     ]).
 
 get_update_seq(Index) ->
@@ -259,7 +260,4 @@ construct_bookmark_msg(_) ->
     throw({bad_request, "Invalid bookmark parameter supplied"}).
 
 get_channel() ->
-    case application:get_env(search3, channel_name) of
-        {ok, Channel} -> #{channel => Channel};
-        undefined -> #{channel => default_channel}
-    end.
+    #{channel => ?SEARCH_CHANNEL}.

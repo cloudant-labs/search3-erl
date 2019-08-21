@@ -1,4 +1,5 @@
 -define(SEARCH_JOB_TYPE, <<"search">>).
+-define(SEARCH_CHANNEL, search_channel).
 
 -record(index, {
     current_seq=0,
