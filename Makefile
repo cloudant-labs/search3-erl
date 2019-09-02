@@ -1,5 +1,5 @@
 
-version = ab448759a5dafbbbb5932658a8438d0917c361fe
+version = 80751147187d06315b2ef949078ecbce07495c57
 url = https://raw.githubusercontent.com/cloudant-labs/search3-java/$(version)/src/main/proto/search3.proto
 
 all: update compile

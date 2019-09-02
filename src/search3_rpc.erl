@@ -185,13 +185,19 @@ construct_search_msg(Prefix, #index_query_args{}=QueryArgs) ->
     Query1 = binary_to_list(Query),
     SortArg = construct_sort_msg(Sort),
     IncludeFields1 = construct_include_fields_msg(IncludeFields),
+    Counts1 = construct_counts_msg(Counts),
+    Ranges1 = construct_ranges_msg(Ranges),
+    DrillDown1 = construct_drilldown_msg(DrillDown),
     Msg = #{
         index => Prefix,
         query => Query1,
         limit => Limit,
         stale => Stale,
         sort => SortArg,
-        include_fields => IncludeFields1
+        include_fields => IncludeFields1,
+        counts => Counts1,
+        ranges => Ranges1,
+        drilldown => DrillDown1
     },
     Msg2 = case construct_bookmark_msg(Bookmark) of
         nil -> Msg;
@@ -241,6 +247,34 @@ construct_sort_msg(SortArg) when is_list(SortArg) ->
     #{fields => SortArg};
 construct_sort_msg(_) ->
     #{}.
+
+construct_counts_msg(Counts) when is_binary(Counts) ->
+    [Counts];
+construct_counts_msg(Counts) when is_list(Counts) ->
+    Counts;
+construct_counts_msg(_) ->
+    [].
+
+construct_ranges_msg([nil]) ->
+    #{};
+construct_ranges_msg({Ranges}) when is_list(Ranges) ->
+    MakeRangeFun = fun
+        ({K, {V}}) ->
+            SubList = [{?b2l(F), ?b2l(R)} || {F, R} <- V],
+            SubMap = maps:from_list(SubList),
+            {?b2l(K), #{ranges => SubMap}}
+    end,
+    RangesList = lists:map(MakeRangeFun, Ranges),
+    maps:from_list(RangesList);
+construct_ranges_msg(_) ->
+    #{}.
+
+construct_drilldown_msg([]) ->
+    [];
+construct_drilldown_msg(Drilldown) when is_list(Drilldown) ->
+    [#{parts => Part} || Part <- Drilldown];
+construct_drilldown_msg(_) ->
+    [].
 
 % the default value would be us starting at the beginning
 construct_bookmark_msg(nil) ->
