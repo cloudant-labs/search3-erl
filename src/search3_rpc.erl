@@ -241,21 +241,21 @@ construct_group_msg(Prefix, #index_query_args{}=QueryArgs) ->
     },
     Msg.
 
+construct_sort_msg(relevance) ->
+    #{};
 construct_sort_msg(SortArg) when is_binary(SortArg) ->
     #{fields => [SortArg]};
 construct_sort_msg(SortArg) when is_list(SortArg) ->
-    #{fields => SortArg};
-construct_sort_msg(_) ->
-    #{}.
+    #{fields => SortArg}.
 
+construct_counts_msg(nil) ->
+    [];
 construct_counts_msg(Counts) when is_binary(Counts) ->
     [Counts];
 construct_counts_msg(Counts) when is_list(Counts) ->
-    Counts;
-construct_counts_msg(_) ->
-    [].
+    Counts.
 
-construct_ranges_msg([nil]) ->
+construct_ranges_msg(nil) ->
     #{};
 construct_ranges_msg({Ranges}) when is_list(Ranges) ->
     MakeRangeFun = fun
@@ -265,16 +265,12 @@ construct_ranges_msg({Ranges}) when is_list(Ranges) ->
             {?b2l(K), #{ranges => SubMap}}
     end,
     RangesList = lists:map(MakeRangeFun, Ranges),
-    maps:from_list(RangesList);
-construct_ranges_msg(_) ->
-    #{}.
+    maps:from_list(RangesList).
 
 construct_drilldown_msg([]) ->
     [];
 construct_drilldown_msg(Drilldown) when is_list(Drilldown) ->
-    [#{parts => Part} || Part <- Drilldown];
-construct_drilldown_msg(_) ->
-    [].
+    [#{parts => Part} || Part <- Drilldown].
 
 % the default value would be us starting at the beginning
 construct_bookmark_msg(nil) ->
