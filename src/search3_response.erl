@@ -4,6 +4,7 @@
     bookmark_to_json/1,
     groups_to_json/3,
     hits_to_json/3,
+    facets_to_json/1,
 
     handle_response/2,
     handle_search_response/2
@@ -65,6 +66,15 @@ order_to_json(Order) ->
     end,
     lists:map(OrderFun, Order).
 
+facets_to_json(Counts) ->
+    CountsList = maps:to_list(Counts),
+    CountsFun = fun
+        ({K, V}) when is_binary(K), is_map(V) ->
+            #{counts := SubCounts} = V,
+            SubCountsList = maps:to_list(SubCounts),
+            {K, {SubCountsList}}
+    end,
+    {lists:map(CountsFun, CountsList)}.
 
 handle_search_response({ok, #{groups := Groups, matches := Matches,
         session := Session}, _}, BuildSession) ->
@@ -78,7 +88,9 @@ handle_search_response({ok, Response, _Header}, BuildSession) ->
     } = Response,
     verify_same_session(BuildSession, Session),
     Bookmark = maps:get(bookmark, Response, <<>>),
-    {search, Bookmark, Matches, Hits};
+    Counts = maps:get(counts, Response, undefined),
+    Ranges = maps:get(ranges, Response, undefined),
+    {search, Bookmark, Matches, Hits, Counts, Ranges};
 handle_search_response({error, Error}, _) ->
     handle_error_response({error, Error}).
 

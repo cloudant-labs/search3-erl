@@ -30,14 +30,27 @@ handle_search_req(#httpd{method=Method, path_parts=[_, _, _, _, IndexName]}=Req
                 {total_rows, Matches},
                 {groups, GroupsJson}
             ]});
-        {search, Bookmark, Matches, Hits} ->
+        {search, Bookmark, Matches, Hits, Counts0, Ranges0} ->
             Hits1 = search3_response:hits_to_json(Db, IncludeDocs, Hits),
             Bookmark1 = search3_response:bookmark_to_json(Bookmark),
+            Counts = case Counts0 of
+                undefined ->
+                    [];
+                _ ->
+                    [{counts, search3_response:facets_to_json(Counts0)}]
+            end,
+            Ranges = case Ranges0 of
+                undefined ->
+                    [];
+                _ ->
+                    [{ranges, search3_response:facets_to_json(Ranges0)}]
+            end,
             send_json(Req, 200, {[
                 {total_rows, Matches},
                 {bookmark, Bookmark1},
                 {rows, Hits1}
-            ]})
+            ] ++ Counts ++ Ranges
+            })
     end;
 
 handle_search_req(#httpd{path_parts=[_, _, _, _, _]}=Req, _Db, _DDoc,
@@ -89,7 +102,13 @@ parse_index_param("group_sort", Value) ->
     [{group_sort, ?JSON_DECODE(Value)}];
 parse_index_param("group_limit", Value) ->
     [{group_limit, parse_positive_int_param("group_limit", Value,
-        "max_group_limit", "200")}].
+        "max_group_limit", "200")}];
+parse_index_param("counts", Value) ->
+    [{counts, ?JSON_DECODE(Value)}];
+parse_index_param("ranges", Value) ->
+    [{ranges, ?JSON_DECODE(Value)}];
+parse_index_param("drilldown", Value) ->
+    [{drilldown, ?JSON_DECODE(Value)}].
 
 parse_json_index_param(<<"q">>, Value) ->
     [{q, Value}];
@@ -111,7 +130,13 @@ parse_json_index_param(<<"group_sort">>, Value) ->
     [{group_sort, Value}];
 parse_json_index_param(<<"group_limit">>, Value) ->
     [{group_limit, parse_positive_int_param("group_limit", Value,
-        "max_group_limit", "200")}].
+        "max_group_limit", "200")}];
+parse_json_index_param(<<"counts">>, Value) ->
+    [{counts, Value}];
+parse_json_index_param(<<"ranges">>, Value) ->
+    [{ranges, Value}];
+parse_json_index_param(<<"drilldown">>, Value) ->
+    [{drilldown, Value}].
 
 parse_bool_param(_, Val) when is_boolean(Val) ->
     Val;
@@ -164,6 +189,13 @@ validate_index_query(group_sort, Value, #index_query_args{grouping=Grouping}=Arg
     Args#index_query_args{grouping=Grouping#grouping{sort=Value}};
 validate_index_query(group_limit, Value, #index_query_args{grouping=Grouping}=Args) ->
     Args#index_query_args{grouping=Grouping#grouping{limit=Value}};
+validate_index_query(counts, Value, Args) ->
+    Args#index_query_args{counts=Value};
+validate_index_query(ranges, Value, Args) ->
+    Args#index_query_args{ranges=Value};
+validate_index_query(drilldown, Value, Args) ->
+    DrillDown = Args#index_query_args.drilldown,
+    Args#index_query_args{drilldown=[Value|DrillDown]};
 validate_index_query(include_docs, Value, Args) ->
     Args#index_query_args{include_docs=Value};
 validate_index_query(include_fields, Value, Args) ->
