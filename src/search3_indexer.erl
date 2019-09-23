@@ -100,12 +100,14 @@ update_int(#{} = Db, State) ->
             proc := Proc
         } = State2,
 
+        DocAcc1 = fetch_docs(TxDb, DocAcc),
+
         % 1) purge_seq is empty for now, subsequent releases will support this
         % 2) We are indexing inside a transaction, which has a timeout of 5s.
         % This can potentially be a problem for large documents. We should
         % revisit this design later.
         try
-            Session = index_docs(Index, Proc, LastSeq, <<>>, DocAcc),
+            Session = index_docs(Index, Proc, LastSeq, <<>>, DocAcc1),
              % Update the session after each update
             Index1 = Index#index{session = Session},
             State3 = maps:put(index, Index1, State2),
@@ -146,30 +148,19 @@ fold_changes(State) ->
         tx_db := TxDb
     } = State,
     fabric2_db:fold_changes(TxDb, SearchSeq,
-        fun load_changes/2, State, [{limit, Limit}]).
+        fun load_changes_count/2, State, [{limit, Limit}]).
 
-% grabs the document from changes feed, and stores it into the document
-% accumulator for indexing later
-load_changes(Change, Acc) ->
+load_changes_count(Change, Acc) ->
     #{
         doc_acc := DocAcc,
-        count := Count,
-        tx_db := TxDb
+        count := Count
     } = Acc,
     #{
         id := Id,
-        sequence := LastSeq,
-        deleted := Deleted
+        sequence := LastSeq
     } = Change,
-    Doc = if Deleted -> []; true ->
-        case fabric2_db:open_doc(TxDb, Id) of
-            {ok, Doc0} -> Doc0;
-            {not_found, _} -> []
-        end
-    end,
-    Change1 = maps:put(doc, Doc, Change),
     Acc1 = Acc#{
-        doc_acc := DocAcc ++ [Change1],
+        doc_acc := DocAcc ++ [Change],
         count := Count +1,
         last_seq := LastSeq
     },
@@ -186,6 +177,46 @@ index_docs(Index, Proc, Seq, PurgeSeq, Docs) ->
     end,
     {Session, _} = lists:foldl(DocIndexerFun, {InitSession, Seq}, Docs),
     Session.
+
+fetch_docs(Db, Changes) ->
+    {Deleted, NotDeleted} = lists:partition(fun(Doc) ->
+        #{deleted := Deleted} = Doc,
+        Deleted
+    end, Changes),
+
+    RevState = lists:foldl(fun(Change, Acc) ->
+        #{id := Id} = Change,
+        RevFuture = fabric2_fdb:get_winning_revs_future(Db, Id, 1),
+        Acc#{
+            RevFuture => {Id, Change}
+        }
+    end, #{}, NotDeleted),
+
+    RevFutures = maps:keys(RevState),
+    BodyState = lists:foldl(fun(RevFuture, Acc) ->
+        {Id, Change} = maps:get(RevFuture, RevState),
+        Revs = fabric2_fdb:get_winning_revs_wait(Db, RevFuture),
+
+        % I'm assuming that in this changes transaction that the winning
+        % doc body exists since it is listed in the changes feed as not deleted
+        #{winner := true} = RevInfo = lists:last(Revs),
+        BodyFuture = fabric2_fdb:get_doc_body_future(Db, Id, RevInfo),
+        Acc#{
+            BodyFuture => {Id, RevInfo, Change}
+        }
+    end, #{}, erlfdb:wait_for_all(RevFutures)),
+
+    BodyFutures = maps:keys(BodyState),
+    ChangesWithDocs = lists:map(fun (BodyFuture) ->
+        {Id, RevInfo, Change} = maps:get(BodyFuture, BodyState),
+        Doc = fabric2_fdb:get_doc_body_wait(Db, Id, RevInfo, BodyFuture),
+        Change#{doc => Doc}
+    end, erlfdb:wait_for_all(BodyFutures)),
+
+    % This combines the deleted changes with the changes that contain docs
+    % Important to note that this is now unsorted. Which is fine for now
+    % But later could be an issue if we split this across transactions
+    Deleted ++ ChangesWithDocs.
 
 extract_fields(Proc, Doc) ->
     Json = couch_doc:to_json_obj(Doc, []),
