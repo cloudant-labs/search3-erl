@@ -180,11 +180,17 @@ construct_search_msg(Prefix, #index_query_args{}=QueryArgs) ->
         counts = Counts,
         ranges = Ranges,
         drilldown = DrillDown,
-        include_fields = IncludeFields
+        include_fields = IncludeFields,
+        highlight_fields = HFields,
+        highlight_pre_tag = HPreTag,
+        highlight_post_tag = HPostTag,
+        highlight_number = HNumber,
+        highlight_size = HSize
     } = QueryArgs,
     Query1 = binary_to_list(Query),
     SortArg = construct_sort_msg(Sort),
-    IncludeFields1 = construct_include_fields_msg(IncludeFields),
+    IncludeFields1 = construct_fields_msg(IncludeFields),
+    HFields1 = construct_fields_msg(HFields),
     Counts1 = construct_counts_msg(Counts),
     Ranges1 = construct_ranges_msg(Ranges),
     DrillDown1 = construct_drilldown_msg(DrillDown),
@@ -197,7 +203,12 @@ construct_search_msg(Prefix, #index_query_args{}=QueryArgs) ->
         include_fields => IncludeFields1,
         counts => Counts1,
         ranges => Ranges1,
-        drilldown => DrillDown1
+        drilldown => DrillDown1,
+        highlight_fields => HFields1,
+        highlight_pre_tag => HPreTag,
+        highlight_post_tag => HPostTag,
+        highlight_number => HNumber,
+        highlight_size => HSize
     },
     Msg2 = case construct_bookmark_msg(Bookmark) of
         nil -> Msg;
@@ -206,11 +217,11 @@ construct_search_msg(Prefix, #index_query_args{}=QueryArgs) ->
     Msg2.
 
 % Need to add a check at httpd layer to make sure each field is a string
-construct_include_fields_msg(nil) ->
+construct_fields_msg(nil) ->
     [];
-construct_include_fields_msg(IncludeFields) when is_binary(IncludeFields) ->
+construct_fields_msg(IncludeFields) when is_binary(IncludeFields) ->
     [IncludeFields];
-construct_include_fields_msg(IncludeFields) when is_list(IncludeFields) ->
+construct_fields_msg(IncludeFields) when is_list(IncludeFields) ->
     IncludeFields.
 
 construct_group_msg(Prefix, #index_query_args{}=QueryArgs) ->
