@@ -108,7 +108,17 @@ parse_index_param("counts", Value) ->
 parse_index_param("ranges", Value) ->
     [{ranges, ?JSON_DECODE(Value)}];
 parse_index_param("drilldown", Value) ->
-    [{drilldown, ?JSON_DECODE(Value)}].
+    [{drilldown, ?JSON_DECODE(Value)}];
+parse_index_param("highlight_fields", Value) ->
+    [{highlight_fields, ?JSON_DECODE(Value)}];
+parse_index_param("highlight_pre_tag", Value) ->
+    [{highlight_pre_tag, ?JSON_DECODE(Value)}];
+parse_index_param("highlight_post_tag", Value) ->
+    [{highlight_post_tag, ?JSON_DECODE(Value)}];
+parse_index_param("highlight_number", Value) ->
+    [{highlight_number, validate_positive_int("highlight_number", Value)}];
+parse_index_param("highlight_size", Value) ->
+    [{highlight_size, validate_positive_int("highlight_size", Value)}].
 
 parse_json_index_param(<<"q">>, Value) ->
     [{q, Value}];
@@ -136,7 +146,17 @@ parse_json_index_param(<<"counts">>, Value) ->
 parse_json_index_param(<<"ranges">>, Value) ->
     [{ranges, Value}];
 parse_json_index_param(<<"drilldown">>, Value) ->
-    [{drilldown, Value}].
+    [{drilldown, Value}];
+parse_json_index_param(<<"highlight_fields">>, Value) ->
+    [{highlight_fields, Value}];
+parse_json_index_param(<<"highlight_pre_tag">>, Value) ->
+    [{highlight_pre_tag, Value}];
+parse_json_index_param(<<"highlight_pos_tag">>, Value) ->
+    [{highlight_post_tag, Value}];
+parse_json_index_param(<<"highlight_number">>, Value) ->
+    [{highlight_number, validate_positive_int("highlight_number", Value)}];
+parse_json_index_param(<<"highlight_size">>, Value) ->
+    [{highlight_size, validate_positive_int("highlight_size", Value)}].
 
 parse_bool_param(_, Val) when is_boolean(Val) ->
     Val;
@@ -177,6 +197,20 @@ parse_positive_int_param(Name, Val, Prop, Default) ->
         throw({query_parse_error, ?l2b(Msg)})
     end.
 
+validate_positive_int(Name, Val) ->
+    case parse_int_param(Name, Val) of
+    IntVal when IntVal > 0 ->
+        IntVal;
+    IntVal when IntVal =< 0 ->
+        Fmt = "~s must be greater than zero",
+        Msg = io_lib:format(Fmt, [Name]),
+        throw({query_parse_error, ?l2b(Msg)});
+    _ ->
+        Fmt = "Invalid value for ~s: ~p",
+        Msg = io_lib:format(Fmt, [Name, Val]),
+        throw({query_parse_error, ?l2b(Msg)})
+    end.
+
 validate_index_query(q, Value, Args) ->
     Args#index_query_args{q=Value};
 validate_index_query(stale, Value, Args) ->
@@ -203,7 +237,19 @@ validate_index_query(include_fields, Value, Args) ->
 validate_index_query(bookmark, Value, Args) ->
     Args#index_query_args{bookmark=Value};
 validate_index_query(sort, Value, Args) ->
-    Args#index_query_args{sort=Value}.
+    Args#index_query_args{sort=Value};
+validate_index_query(highlight_fields, Value, Args) ->
+    Args#index_query_args{highlight_fields=Value};
+validate_index_query(highlight_pre_tag, Value, Args) ->
+    Args#index_query_args{highlight_pre_tag=Value};
+validate_index_query(highlight_post_tag, Value, Args) ->
+    Args#index_query_args{highlight_post_tag=Value};
+validate_index_query(highlight_number, Value, Args) ->
+    Args#index_query_args{highlight_number=Value};
+validate_index_query(highlight_size, Value, Args) ->
+    Args#index_query_args{highlight_size=Value};
+validate_index_query(extra, _Value, Args) ->
+    Args.
 
 validate_search_restrictions(_Db, _DDoc, Args) ->
     #index_query_args{

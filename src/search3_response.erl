@@ -12,14 +12,27 @@
 
 hits_to_json(Db, IncludeDocs, Hits) ->
     ConvertHitsFun = fun
-        (#{fields := Fields, id := Id, order := Order}) ->
+        (#{fields := Fields, id := Id, order := Order,
+                highlights := Highlights}) ->
             Order1 = order_to_json(Order),
             Fields1 = fields_to_json(Fields),
+            Highlights1 = highlights_to_json(Highlights),
             if IncludeDocs ->
                 Doc = search3_util:get_doc(Db, Id),
-                {[{fields, {Fields1}}, {id, Id}, {order, Order1}, Doc]};
+                if Highlights =:= [] ->
+                    {[{fields, {Fields1}}, {id, Id}, {order, Order1},
+                        Doc]};
+                true ->
+                    {[{fields, {Fields1}}, {id, Id}, {order, Order1},
+                         {highlights, {Highlights1}}, Doc]}
+                end;
             true ->
-                {[{fields, {Fields1}}, {id, Id}, {order, Order1}]}
+                if Highlights =:= [] ->
+                    {[{fields, {Fields1}}, {id, Id}, {order, Order1}]};
+                true ->
+                    {[{fields, {Fields1}}, {id, Id}, {order, Order1},
+                        {highlights, {Highlights1}}]}
+                end
             end
     end,
     lists:map(ConvertHitsFun, Hits).
@@ -75,6 +88,15 @@ facets_to_json(Counts) ->
             {K, {SubCountsList}}
     end,
     {lists:map(CountsFun, CountsList)}.
+
+highlights_to_json([]) ->
+    [];
+highlights_to_json(Fields) when is_list(Fields) ->
+    ConvertHighLightsFun = fun
+        (#{fieldname := Name, highlights := Highlights}) ->
+            {Name, Highlights}
+    end,
+    lists:map(ConvertHighLightsFun, Fields).
 
 handle_search_response({ok, #{groups := Groups, matches := Matches,
         session := Session}, _}, BuildSession) ->
