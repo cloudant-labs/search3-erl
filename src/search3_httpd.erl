@@ -116,9 +116,9 @@ parse_index_param("highlight_pre_tag", Value) ->
 parse_index_param("highlight_post_tag", Value) ->
     [{highlight_post_tag, ?JSON_DECODE(Value)}];
 parse_index_param("highlight_number", Value) ->
-    [{highlight_number, parse_positive_int_param2("highlight_number", Value)}];
+    [{highlight_number, validate_positive_int("highlight_number", Value)}];
 parse_index_param("highlight_size", Value) ->
-    [{highlight_size, parse_positive_int_param2("highlight_size", Value)}].
+    [{highlight_size, validate_positive_int("highlight_size", Value)}].
 
 parse_json_index_param(<<"q">>, Value) ->
     [{q, Value}];
@@ -154,9 +154,9 @@ parse_json_index_param(<<"highlight_pre_tag">>, Value) ->
 parse_json_index_param(<<"highlight_pos_tag">>, Value) ->
     [{highlight_post_tag, Value}];
 parse_json_index_param(<<"highlight_number">>, Value) ->
-    [{highlight_number, parse_positive_int_param2("highlight_number", Value)}];
+    [{highlight_number, validate_positive_int("highlight_number", Value)}];
 parse_json_index_param(<<"highlight_size">>, Value) ->
-    [{highlight_size, parse_positive_int_param2("highlight_size", Value)}].
+    [{highlight_size, validate_positive_int("highlight_size", Value)}].
 
 parse_bool_param(_, Val) when is_boolean(Val) ->
     Val;
@@ -197,7 +197,7 @@ parse_positive_int_param(Name, Val, Prop, Default) ->
         throw({query_parse_error, ?l2b(Msg)})
     end.
 
-parse_positive_int_param2(Name, Val) ->
+validate_positive_int(Name, Val) ->
     case parse_int_param(Name, Val) of
     IntVal when IntVal > 0 ->
         IntVal;
