@@ -9,7 +9,7 @@
 -include("search3.hrl").
 
 set_timeout() ->
-    couch_jobs:set_type_timeout(?SEARCH_JOB_TYPE, 6 * 1000).
+    couch_jobs:set_type_timeout(?SEARCH_JOB_TYPE, 6).
 
 build_search(TxDb, Index, UpdateSeq) ->
     {ok, JobId} = build_search_async(TxDb, Index),
