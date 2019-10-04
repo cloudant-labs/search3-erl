@@ -73,36 +73,42 @@ handle_analyze_req(Req) ->
     send_method_not_allowed(Req, "GET,POST").
 
 analyze(Req, Analyzer, Text) ->
-    case Analyzer of
-        undefined ->
-            throw({bad_request, "analyzer parameter is mandatory"});
-        _ when is_list(Analyzer) ->
-            ok;
-        _ when is_binary(Analyzer) ->
-            ok;
-        {[_|_]} ->
-            ok;
-        _ ->
-            throw({bad_request, "analyzer parameter must be a string or an object"})
-    end,
-    case Text of
-        undefined ->
-            throw({bad_request, "text parameter is mandatory"});
-        _ when is_list(Text) ->
-            ok;
-        _ when is_binary(Text) ->
-            ok;
-        _ ->
-            throw({bad_request, "text parameter must be a string"})
-    end,
-    Response = search3_rpc:analyze(couch_util:to_binary(Analyzer),
-        couch_util:to_binary(Text)),
-    couch_log:notice("Response ~p", [Response]),
+    validate_string_or_object(Analyzer),
+    validate_string(Text),
+    Response = search3_rpc:analyze(Analyzer, Text),
     case search3_response:handle_analyze_response(Response) of
         {ok, Tokens} ->
             send_json(Req, 200, {[{tokens, Tokens}]});
         {error, Reason} ->
             send_error(Req, Reason)
+    end.
+
+validate_string_or_object(Analyzer) ->
+    case Analyzer of
+        undefined ->
+            throw({bad_request, "analyzer parameter is mandatory"});
+        A1 when is_list(A1) ->
+            ok;
+        A2 when is_binary(A2) ->
+            ok;
+        {[_|_]} ->
+            ok;
+        {[]} ->
+            throw({bad_request, "analyzer parameter must be not be empty object"});
+        _ ->
+            throw({bad_request, "analyzer parameter must be a string or an object"})
+    end.
+
+validate_string(Text) ->
+    case Text of
+        undefined ->
+            throw({bad_request, "text parameter is mandatory"});
+        T1 when is_list(T1) ->
+            ok;
+        T2 when is_binary(T2) ->
+            ok;
+        _ ->
+            throw({bad_request, "text parameter must be a string"})
     end.
 
 parse_index_params(#httpd{method='GET'}=Req, Db) ->
