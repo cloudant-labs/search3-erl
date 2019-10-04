@@ -13,3 +13,4 @@ design_handler(<<"_search">>) -> fun search3_httpd:handle_search_req/3;
 design_handler(_) -> no_match.
 
 db_handler(_) -> no_match.
+
