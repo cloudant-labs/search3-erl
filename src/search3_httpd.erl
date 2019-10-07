@@ -1,6 +1,6 @@
 -module(search3_httpd).
 
--export([handle_search_req/3]).
+-export([handle_search_req/3, handle_analyze_req/1]).
 
 -include("search3.hrl").
 -include_lib("couch/include/couch_db.hrl").
@@ -58,6 +58,58 @@ handle_search_req(#httpd{path_parts=[_, _, _, _, _]}=Req, _Db, _DDoc,
     send_method_not_allowed(Req, "GET,POST");
 handle_search_req(Req, _Db, _DDoc, _RetryCount, _RetryPause) ->
     send_error(Req, {bad_request, "path not recognized"}).
+
+handle_analyze_req(#httpd{method='GET'}=Req) ->
+    Analyzer = couch_httpd:qs_value(Req, "analyzer"),
+    Text = couch_httpd:qs_value(Req, "text"),
+    analyze(Req, Analyzer, Text);
+handle_analyze_req(#httpd{method='POST'}=Req) ->
+    couch_httpd:validate_ctype(Req, "application/json"),
+    {Fields} = chttpd:json_body_obj(Req),
+    Analyzer = couch_util:get_value(<<"analyzer">>, Fields),
+    Text = couch_util:get_value(<<"text">>, Fields),
+    analyze(Req, Analyzer, Text);
+handle_analyze_req(Req) ->
+    send_method_not_allowed(Req, "GET,POST").
+
+analyze(Req, Analyzer, Text) ->
+    validate_string_or_object(Analyzer),
+    validate_string(Text),
+    Response = search3_rpc:analyze(Analyzer, Text),
+    case search3_response:handle_analyze_response(Response) of
+        {ok, Tokens} ->
+            send_json(Req, 200, {[{tokens, Tokens}]});
+        {error, Reason} ->
+            send_error(Req, Reason)
+    end.
+
+validate_string_or_object(Analyzer) ->
+    case Analyzer of
+        undefined ->
+            throw({bad_request, "analyzer parameter is mandatory"});
+        A1 when is_list(A1) ->
+            ok;
+        A2 when is_binary(A2) ->
+            ok;
+        {[_|_]} ->
+            ok;
+        {[]} ->
+            throw({bad_request, "analyzer parameter must be not be empty object"});
+        _ ->
+            throw({bad_request, "analyzer parameter must be a string or an object"})
+    end.
+
+validate_string(Text) ->
+    case Text of
+        undefined ->
+            throw({bad_request, "text parameter is mandatory"});
+        T1 when is_list(T1) ->
+            ok;
+        T2 when is_binary(T2) ->
+            ok;
+        _ ->
+            throw({bad_request, "text parameter must be a string"})
+    end.
 
 parse_index_params(#httpd{method='GET'}=Req, Db) ->
     IndexParams = lists:flatmap(fun({K, V}) -> parse_index_param(K, V) end,

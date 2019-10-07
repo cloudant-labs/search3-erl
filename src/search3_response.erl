@@ -7,7 +7,8 @@
     facets_to_json/1,
 
     handle_response/2,
-    handle_search_response/2
+    handle_search_response/2,
+    handle_analyze_response/1
 ]).
 
 hits_to_json(Db, IncludeDocs, Hits) ->
@@ -114,6 +115,11 @@ handle_search_response({ok, Response, _Header}, BuildSession) ->
     Ranges = maps:get(ranges, Response, undefined),
     {search, Bookmark, Matches, Hits, Counts, Ranges};
 handle_search_response({error, Error}, _) ->
+    handle_error_response({error, Error}).
+
+handle_analyze_response({ok,  #{tokens := Tokens}, _}) ->
+    {ok, Tokens};
+handle_analyze_response({error, Error}) ->
     handle_error_response({error, Error}).
 
 % Handles generic responses for now to simply verify session is the same

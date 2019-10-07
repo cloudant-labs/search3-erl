@@ -12,7 +12,8 @@
     update_index/5,
     search_index/2,
     set_update_seq/3,
-    get_channel/0
+    get_channel/0,
+    analyze/2
     ]).
 
 get_update_seq(Index) ->
@@ -77,6 +78,10 @@ search_index(Index, QueryArgs) ->
             GroupMsg = construct_group_msg(IndexMsg, QueryArgs),
             search_client:group_search(GroupMsg, get_channel())
     end.
+
+analyze(AnalyzerName, Text) ->
+    AnalyzeMsg = #{analyzer => #{name => AnalyzerName}, text => Text},
+    search_client:analyze(AnalyzeMsg, get_channel()).
 
 %% Internal
 
