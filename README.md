@@ -21,6 +21,8 @@ Currently, we are in the beta version, and we support:
 4) Limit
 5) Group Search
 6) Different default Analyzers and per_field Analyzers
+7) Facet Search
+8) Highlighting
 
 Code layout:
 
