@@ -47,7 +47,7 @@ delete_index(#index{session = Session} = Index, Id, Seq, PurgeSeq) ->
         purge_seq => #{seq => PurgeSeq}
     },
     Resp = search_client:delete_document(Msg, get_channel()),
-    search3_response:handle_response(Resp, Session).
+    search3_response:handle_update_response(Resp, Session).
 
 info_index(#index{session = Session} = Index) ->
     IndexMsg = construct_index_msg(Index),
@@ -65,7 +65,7 @@ update_index(#index{session = Session} = Index, Id, Seq, PurgeSeq, Fields) ->
         fields => Fields1
     },
     Resp = search_client:update_document(Msg, get_channel()),
-    search3_response:handle_response(Resp, Session).
+    search3_response:handle_update_response(Resp, Session).
 
 search_index(Index, QueryArgs) ->
     #index_query_args{grouping = Grouping} = QueryArgs,

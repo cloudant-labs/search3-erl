@@ -8,6 +8,7 @@
 
     handle_response/2,
     handle_search_response/2,
+    handle_update_response/2,
     handle_analyze_response/1
 ]).
 
@@ -129,6 +130,12 @@ handle_response({ok, #{session := Session} = Response, _},
     VSession = verify_same_session(CurrentSession, Session),
     {VSession, Response};
 handle_response({error, Error}, _) ->
+    handle_error_response({error, Error}).
+
+handle_update_response({ok, #{session := Session}, _}, CurrentSession) ->
+    VSession = verify_same_session(CurrentSession, Session),
+    VSession;
+handle_update_response({error, Error}, _) ->
     handle_error_response({error, Error}).
 
 handle_error_response({error, {<<"9">>, Msg}}) ->
