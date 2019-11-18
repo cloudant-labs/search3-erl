@@ -20,7 +20,7 @@ run_query(Db, Index, QueryArgs) ->
     try
         Response = search3_rpc:search_index(Index, QueryArgs),
         search3_response:handle_search_response(Response, Session)
-    catch error:session_mismatch ->
+    catch throw:session_mismatch ->
         run_query(Db, Index, QueryArgs)
     end.
 
