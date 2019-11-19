@@ -21,13 +21,19 @@ start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 init(_) ->
-    process_flag(trap_exit, true),
     search3_jobs:set_timeout(),
-    State = #{
-        workers => [],
-        num_workers => num_workers()
-    },
-    {ok, spawn_workers(State)}.
+    case fabric2_node_types:is_type("search_indexing") of
+        true ->
+            process_flag(trap_exit, true),
+            State = #{
+                workers => [],
+                num_workers => num_workers()
+            },
+            {ok, spawn_workers(State)};
+        false ->
+            ignore
+    end.
+
 
 terminate(_, _St) ->
     ok.
