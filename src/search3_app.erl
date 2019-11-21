@@ -14,7 +14,7 @@
     stop/1
 ]).
 
-start(_StartType, StartArgs) ->
+start(_StartType, _StartArgs) ->
     {ok, _} = application:ensure_all_started(grpcbox),
     Url = config:get("search3", "service_url", "localhost"),
     Port = case config:get("search3", "service_port", 8443) of
@@ -23,7 +23,7 @@ start(_StartType, StartArgs) ->
     end,
     Endpoints = [{http, Url, Port, []}],
     {ok, _} = grpcbox_channel_sup:start_child(?SEARCH_CHANNEL, Endpoints, #{}),
-    search3_sup:start_link(StartArgs).
+    search3_sup:start_link().
 
 stop(_State) ->
     ok.
