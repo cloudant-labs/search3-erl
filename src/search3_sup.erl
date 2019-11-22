@@ -38,4 +38,4 @@ flags() ->
         strategy => one_for_all,
         intensity => 1,
         period => 5
-    },
+    }.
