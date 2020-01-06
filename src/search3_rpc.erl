@@ -144,7 +144,7 @@ construct_default(Analyzer, Stopwords) ->
 make_fields_map(Fields) when is_list(Fields) ->
     FieldsMapFun = fun
         ({Name, Value, {Options}}) ->
-            Init = #{name => Name, value => fields_value(Value)},
+            Init = #{name => Name, value => fields_value(Value), analyzed => true},
             apply_options(Init, Options)
     end,
     lists:map(FieldsMapFun, Fields).
