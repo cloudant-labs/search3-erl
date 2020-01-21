@@ -35,7 +35,7 @@ set_update_seq(#index{session = Session} = Index, Seq, _PurgeSeq) ->
         index => IndexMsg,
         seq => #{seq => Seq}
     },
-    Resp = search_client:set_update_sequence(Msg, get_channel()),
+    Resp = set_update_sequence(Msg),
     search3_response:handle_response(Resp, Session).
 
 delete_index(#index{session = Session} = Index, Id, Seq, PurgeSeq) ->
@@ -46,12 +46,12 @@ delete_index(#index{session = Session} = Index, Id, Seq, PurgeSeq) ->
         seq => #{seq => Seq},
         purge_seq => #{seq => PurgeSeq}
     },
-    Resp = search_client:delete_document(Msg, get_channel()),
+    Resp = delete_document(Msg),
     search3_response:handle_response(Resp, Session).
 
 info_index(#index{session = Session} = Index) ->
     IndexMsg = construct_index_msg(Index),
-    Resp = search_client:info(IndexMsg, get_channel()),
+    Resp = info(IndexMsg),
     search3_response:handle_response(Resp, Session).
 
 update_index(#index{session = Session} = Index, Id, Seq, PurgeSeq, Fields) ->
@@ -64,7 +64,7 @@ update_index(#index{session = Session} = Index, Id, Seq, PurgeSeq, Fields) ->
         purge_seq => #{seq => PurgeSeq},
         fields => Fields1
     },
-    Resp = search_client:update_document(Msg, get_channel()),
+    Resp = update_document(Msg),
     search3_response:handle_response(Resp, Session).
 
 search_index(Index, QueryArgs) ->
@@ -73,15 +73,15 @@ search_index(Index, QueryArgs) ->
     case Grouping#grouping.by of
         nil ->
             Msg = construct_search_msg(IndexMsg, QueryArgs),
-            search_client:search(Msg, get_channel());
+            search(Msg);
         _ ->
             GroupMsg = construct_group_msg(IndexMsg, QueryArgs),
-            search_client:group_search(GroupMsg, get_channel())
+            group_search(GroupMsg)
     end.
 
 analyze(AnalyzerName, Text) ->
     AnalyzeMsg = #{analyzer => #{name => AnalyzerName}, text => Text},
-    search_client:analyze(AnalyzeMsg, get_channel()).
+    analyze(AnalyzeMsg).
 
 %% Internal
 
@@ -306,3 +306,40 @@ construct_bookmark_msg(_) ->
 
 get_channel() ->
     #{channel => ?SEARCH_CHANNEL}.
+
+set_update_sequence(Msg) ->
+    post("SetUpdateSequence", Msg, set_update_seq_request, session_response).
+
+delete_document(Msg) ->
+    post("DeleteDocument", Msg, document_delete_request, session_response).
+
+update_document(Msg) ->
+    post("UpdateDocument", Msg, document_update_request, session_response).
+
+search(Msg) ->
+    post("Search", Msg, search_request, search_response).
+
+group_search(Msg) ->
+    post("GroupSearch", Msg, group_search_request, group_search_response).
+
+info(Msg) ->
+    post("Info", Msg, index, info_response).
+
+delete_index(Msg) ->
+    post("Delete", Msg, index, empty).
+
+analyze(Msg) ->
+    post("Analyze", Msg, analyze_request, analyze_response).
+
+post(Action, Request, RequestType, ResponseType) ->
+    EncodedRequest = search3_pb:encode_msg(Request, RequestType),
+    Url = "http://127.1:8443/Search/" ++ Action,
+    case ibrowse:send_req(Url, [], post, EncodedRequest, [{response_format, binary}]) of
+        {ok, "200", _Headers, EncodedResponse} ->
+            {ok, search3_pb:decode_msg(EncodedResponse, ResponseType), fake_ctx};
+        {ok, "400", _Headers, EncodedResponse} ->
+            #{type := Type, reason := Reason} = search3_pb:decode_msg(EncodedResponse, error_response),
+            {error, {Type, Reason}};
+        {error, Reason} ->
+            {error, Reason}
+    end.

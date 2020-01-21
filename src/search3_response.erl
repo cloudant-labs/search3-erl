@@ -131,14 +131,15 @@ handle_response({ok, #{session := Session} = Response, _},
 handle_response({error, Error}, _) ->
     handle_error_response({error, Error}).
 
-handle_error_response({error, {<<"9">>, Msg}}) ->
-    throw({bad_request, Msg});
-handle_error_response({error, {<<"3">>, <<"session mismatch">>}}) ->
+
+handle_error_response({error, {'CLIENT_ERROR', Reason}}) ->
+    throw({bad_request, Reason});
+handle_error_response({error, {'SESSION_MISMATCH', _Reason}}) ->
     throw(session_mismatch);
-handle_error_response({error, {<<"3">>, Msg}}) ->
-    throw({bad_request, Msg});
-handle_error_response({error, {Code, Reason}}) ->
-    erlang:error({Code, Reason});
+handle_error_response({error, {'SERVER_ERROR', Reason}}) ->
+    erlang:error({server_error, Reason});
+handle_error_response({error, {'UNKNOWN', Reason}}) ->
+    erlang:error({unknown, Reason});
 handle_error_response(Error) ->
     erlang:error(Error).
 
