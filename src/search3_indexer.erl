@@ -171,12 +171,16 @@ index_docs(Index, Proc, Seq, PurgeSeq, Docs) ->
     DocIndexerFun = fun
         (#{deleted := true, id:= Id}, _) ->
             search3_rpc:delete_index(Index, Id, Seq, PurgeSeq);
-        (#{deleted := false, doc := Doc, id:= Id}, _) ->
+        (#{deleted := false, doc := Doc, id:= Id}, Session) ->
             Fields = extract_fields(Proc, Doc),
-            search3_rpc:update_index(Index, Id, Seq, PurgeSeq, Fields)
+            try
+                search3_rpc:update_index(Index, Id, Seq, PurgeSeq, Fields)
+            catch throw:Msg ->
+                couch_log:error("Error Updating Index: ~p", [Msg]),
+                Session
+            end
     end,
-    {Session, _} = lists:foldl(DocIndexerFun, {InitSession, Seq}, Docs),
-    Session.
+    lists:foldl(DocIndexerFun, InitSession, Docs).
 
 fetch_docs(Db, Changes) ->
     {Deleted, NotDeleted} = lists:partition(fun(Doc) ->
