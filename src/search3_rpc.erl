@@ -333,7 +333,8 @@ analyze(Msg) ->
 
 post(Action, Request, RequestType) ->
     EncodedRequest = search3_pb:encode_msg(Request, RequestType),
-    Url = "http://127.1:8443/Search/" ++ Action,
+    Endpoint = get_endpoint(),
+    Url = Endpoint ++ Action,
     case ibrowse:send_req(Url, [], post, EncodedRequest, [{response_format, binary}]) of
         {ok, "200", ResponseHeaders, EncodedResponse} ->
             {_, ResponseType0} = lists:keyfind("rpc-message-type", 1, ResponseHeaders),
@@ -350,3 +351,6 @@ post(Action, Request, RequestType) ->
         {error, Reason} ->
             {error, Reason}
     end.
+
+get_endpoint() ->
+    config:get("search3", "service_url", "http://localhost:8443/Search/").
