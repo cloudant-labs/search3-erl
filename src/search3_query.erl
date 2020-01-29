@@ -8,7 +8,7 @@
 
 run_query(Db, DDoc, IndexName, QueryArgs) ->
     #{name := DbName} = Db,
-    {ok, Index} = search3_util:design_doc_to_index(DDoc, IndexName),
+    {ok, Index} = search3_util:design_doc_to_index(Db, DDoc, IndexName),
     Index1 = Index#index{dbname = DbName},
     run_query(Db, Index1, QueryArgs).
 

@@ -37,7 +37,7 @@ init() ->
     } = JobData,
     {ok, Db} = fabric2_db:open(DbName, []),
     {ok, DDoc} = fabric2_db:open_doc(Db, DDocId),
-    {ok, Index} = search3_util:design_doc_to_index(DDoc, IndexName),
+    {ok, Index} = search3_util:design_doc_to_index(Db, DDoc, IndexName),
     Index1 = Index#index{dbname = DbName},
     HexSig = fabric2_util:to_hex(Index1#index.sig),
 

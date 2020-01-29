@@ -1,12 +1,13 @@
 -module(search3_util).
 
--export([design_doc_to_index/2, get_doc/2]).
+-export([design_doc_to_index/3, get_doc/2]).
 
 -include_lib("couch/include/couch_db.hrl").
+-include_lib("fabric/include/fabric2.hrl").
 
 -include("search3.hrl").
 
-design_doc_to_index(#doc{id=Id,body={Fields}}, IndexName) ->
+design_doc_to_index(#{db_prefix := DbPrefix}, #doc{id=Id,body={Fields}}, IndexName) ->
     Language = couch_util:get_value(<<"language">>, Fields, <<"javascript">>),
     {RawIndexes} = couch_util:get_value(<<"indexes">>, Fields, {[]}),
     InvalidDDocError = {invalid_design_doc,
@@ -22,12 +23,14 @@ design_doc_to_index(#doc{id=Id,body={Fields}}, IndexName) ->
                 Def ->
                     Hash = crypto:hash(sha256, term_to_binary({Analyzer, Def})),
                     Sig = ?l2b(couch_util:to_hex(Hash)),
+                    IndexPrefix = erlfdb_tuple:pack({?DB_SEARCH, Sig}, DbPrefix),
                     {ok, #index{
                         analyzer=Analyzer,
                         ddoc_id=Id,
                         def=Def,
                         def_lang=Language,
                         name=IndexName,
+                        prefix=IndexPrefix,
                         sig=Sig}}
             end;
         _ ->
