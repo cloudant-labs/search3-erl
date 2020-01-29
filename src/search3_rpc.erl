@@ -85,17 +85,14 @@ analyze(AnalyzerName, Text) ->
 
 %% Internal
 
-construct_index_msg(#index{dbname = DbName, sig = Signature,
+construct_index_msg(#index{prefix = Prefix, sig = Signature,
         analyzer = <<"standard">>, session = Session}) ->
-    Prefix= <<DbName/binary, Signature/binary>>,
     #{prefix => Prefix, session => Session};
-construct_index_msg(#index{dbname = DbName, sig = Signature,
+construct_index_msg(#index{prefix = Prefix, sig = Signature,
         analyzer = Analyzer, session = Session}) when is_binary(Analyzer) ->
-    Prefix= <<DbName/binary, Signature/binary>>,
     #{prefix => Prefix, session => Session, default => #{name => Analyzer}};
-construct_index_msg(#index{dbname = DbName, sig = Signature,
+construct_index_msg(#index{prefix = Prefix, sig = Signature,
         analyzer = {Analyzer}, session= Session}) ->
-    Prefix= <<DbName/binary, Signature/binary>>,
     case construct_analyzer_spec(Analyzer) of
         #{name := <<"perfield">>, stopwords := Stopwords} ->
             Fields = construct_per_fields(Analyzer),
