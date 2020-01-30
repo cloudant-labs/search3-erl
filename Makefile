@@ -6,6 +6,8 @@ all: update compile
 
 
 update:
+	pwd
+	ls -l .
 	wget $(url) -O protos/search3.proto.tmp || exit 1
 	ls -l .
 	ls -l protos/
