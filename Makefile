@@ -6,6 +6,7 @@ all: update compile
 
 
 update:
+	@mkdir -p protos
 	@wget -q $(url) -O protos/search3.proto.tmp
 	@cmp -s protos/search3.proto protos/search3.proto.tmp; \
 	if [ "$$?" != "0" ]; then \
