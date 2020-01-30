@@ -6,7 +6,7 @@ all: update compile
 
 
 update:
-	@wget -q $(url) -O protos/search3.proto.tmp
+	wget $(url) -O protos/search3.proto.tmp || exit 1
 	@cmp -s protos/search3.proto protos/search3.proto.tmp; \
 	if [ "$$?" != "0" ]; then \
 		cp protos/search3.proto.tmp protos/search3.proto ;\
