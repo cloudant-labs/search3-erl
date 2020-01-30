@@ -7,18 +7,20 @@ all: update compile
 
 update:
 	wget $(url) -O protos/search3.proto.tmp || exit 1
-	@cmp -s protos/search3.proto protos/search3.proto.tmp; \
+	ls -l .
+	ls -l protos/
+	cmp protos/search3.proto protos/search3.proto.tmp; \
 	if [ "$$?" != "0" ]; then \
 		cp protos/search3.proto.tmp protos/search3.proto ;\
 	fi
-	@$(MAKE) -s generate
+	$(MAKE) generate
 
 
 generate: src/search_client.erl src/search3_pb.erl
 
 
 src/search_client.erl src/search3_pb.erl: protos/search3.proto
-	@REBAR_COLOR=none rebar3 grpc gen
+	REBAR_COLOR=none rebar3 grpc gen
 
 
 compile:
