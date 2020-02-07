@@ -16,7 +16,8 @@
     ]).
 
 get_update_seq(Index) ->
-    {Session, Resp} = info_index(Index),
+    Resp = info_index(Index),
+    Session = maps:get(session, Resp),
     PendingSeq = maps:get(pending_seq, Resp, <<>>),
     CommittedSeq = maps:get(committed_seq, Resp, <<>>),
 

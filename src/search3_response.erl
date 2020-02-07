@@ -124,10 +124,9 @@ handle_analyze_response({error, Error}) ->
 
 % Handles generic responses for now to simply verify session is the same
 % Can update later for more specific handling
-handle_response({ok, #{session := Session} = Response, _},
-        CurrentSession) ->
-    VSession = verify_same_session(CurrentSession, Session),
-    {VSession, Response};
+handle_response({ok, #{session := Session} = Response, _}, CurrentSession) ->
+    verify_same_session(CurrentSession, Session),
+    Response;
 handle_response({error, Error}, _) ->
     handle_error_response({error, Error}).
 

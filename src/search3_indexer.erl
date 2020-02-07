@@ -65,10 +65,10 @@ init() ->
 update(#{} = Db, State) ->
     try
         Index = maps:get(index, State),
-        {InitSession, Seq} = search3_rpc:get_update_seq(Index),
-        Proc = get_os_process(Index#index.def_lang),
         % Start of a new session
-        Index1 = Index#index{session=InitSession},
+        {Session, Seq} = search3_rpc:get_update_seq(Index),
+        Proc = get_os_process(Index#index.def_lang),
+        Index1 = Index#index{session=Session},
         NewState = State#{
             search_seq => Seq,
             last_seq => Seq,
