@@ -161,15 +161,14 @@ load_changes_count(Change, Acc) ->
     {ok, Acc1}.
 
 index_docs(Index, Proc, Docs) ->
-    InitSession = Index#index.session,
     DocIndexerFun = fun
-        (#{deleted := true, id := Id, sequence := Seq}, _) ->
+        (#{deleted := true, id := Id, sequence := Seq}) ->
             search3_rpc:delete_index(Index, Id, Seq, <<>>);
-        (#{deleted := false, doc := Doc, id := Id, sequence := Seq}, _) ->
+        (#{deleted := false, doc := Doc, id := Id, sequence := Seq}) ->
             Fields = extract_fields(Proc, Doc),
             search3_rpc:update_index(Index, Id, Seq, <<>>, Fields)
     end,
-    lists:foldl(DocIndexerFun, InitSession, Docs).
+    lists:foreach(DocIndexerFun, Docs).
 
 fetch_docs(Db, Changes) ->
     {Deleted, NotDeleted} = lists:partition(fun(Doc) ->
