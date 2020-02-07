@@ -11,7 +11,6 @@
     info_index/1,
     update_index/5,
     search_index/2,
-    set_update_seq/3,
     get_channel/0,
     analyze/2
     ]).
@@ -28,15 +27,6 @@ get_update_seq(Index) ->
         {_, _} -> 0
     end,
     {Session, UpdateSeq}.
-
-set_update_seq(#index{session = Session} = Index, Seq, _PurgeSeq) ->
-    IndexMsg = construct_index_msg(Index),
-    Msg = #{
-        index => IndexMsg,
-        seq => #{seq => Seq}
-    },
-    Resp = set_update_sequence(Msg),
-    search3_response:handle_response(Resp, Session).
 
 delete_index(#index{session = Session} = Index, Id, Seq, PurgeSeq) ->
     IndexMsg = construct_index_msg(Index),
@@ -303,9 +293,6 @@ construct_bookmark_msg(_) ->
 
 get_channel() ->
     #{channel => ?SEARCH_CHANNEL}.
-
-set_update_sequence(Msg) ->
-    post("SetUpdateSequence", Msg, set_update_seq_request).
 
 delete_document(Msg) ->
     post("DeleteDocument", Msg, document_delete_request).
