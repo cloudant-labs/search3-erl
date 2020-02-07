@@ -107,7 +107,7 @@ update_int(#{} = Db, State) ->
         % This can potentially be a problem for large documents. We should
         % revisit this design later.
         try
-            Session = index_docs(Index, Proc, LastSeq, <<>>, DocAcc1),
+            Session = index_docs(Index, Proc, DocAcc1),
              % Update the session after each update
             Index1 = Index#index{session = Session},
             State3 = maps:put(index, Index1, State2),
@@ -164,17 +164,16 @@ load_changes_count(Change, Acc) ->
     },
     {ok, Acc1}.
 
-index_docs(Index, Proc, Seq, PurgeSeq, Docs) ->
+index_docs(Index, Proc, Docs) ->
     InitSession = Index#index.session,
     DocIndexerFun = fun
-        (#{deleted := true, id:= Id}, _) ->
-            search3_rpc:delete_index(Index, Id, Seq, PurgeSeq);
-        (#{deleted := false, doc := Doc, id:= Id}, _) ->
+        (#{deleted := true, id := Id, sequence := Seq}, _) ->
+            search3_rpc:delete_index(Index, Id, Seq, <<>>);
+        (#{deleted := false, doc := Doc, id := Id, sequence := Seq}, _) ->
             Fields = extract_fields(Proc, Doc),
-            search3_rpc:update_index(Index, Id, Seq, PurgeSeq, Fields)
+            search3_rpc:update_index(Index, Id, Seq, <<>>, Fields)
     end,
-    {Session, _} = lists:foldl(DocIndexerFun, {InitSession, Seq}, Docs),
-    Session.
+    lists:foldl(DocIndexerFun, InitSession, Docs).
 
 fetch_docs(Db, Changes) ->
     {Deleted, NotDeleted} = lists:partition(fun(Doc) ->
