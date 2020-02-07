@@ -113,10 +113,10 @@ update_int(#{} = Db, State) ->
             State3 = maps:put(index, Index1, State2),
             case Count < Limit of
                 true ->
-                    report_progress(State3, finished),
+                    report_progress(Db, State3, finished),
                     finished;
                 false ->
-                    State4 = report_progress(State3, update),
+                    State4 = report_progress(Db, State3, update),
                     State4 #{
                         tx_db := undefined,
                         count := 0,
@@ -127,7 +127,7 @@ update_int(#{} = Db, State) ->
         catch throw:session_mismatch ->
             % if there is a session mismatch, we just finish this job and
             % restart it again
-            report_progress(State2, finished)
+            report_progress(Db, State2, finished)
         end
     end),
     case State5 of
@@ -220,9 +220,8 @@ extract_fields(Proc, Doc) ->
     [Fields|_] = proc_prompt(Proc, [<<"index_doc">>, Json]),
     [list_to_tuple(Field) || Field <- Fields].
 
-report_progress(State, UpdateType) ->
+report_progress(Db, State, UpdateType) ->
     #{
-        tx_db := TxDb,
         job := Job1,
         job_data := JobData,
         last_seq := LastSeq,
@@ -249,21 +248,23 @@ report_progress(State, UpdateType) ->
         <<"session">> => Session
     },
 
-    case UpdateType of
-        update ->
-            case couch_jobs:update(TxDb, Job1, NewData) of
-                {ok, Job2} ->
-                    State#{job := Job2};
-                {error, halt} ->
-                    couch_log:error("~s job halted :: ~w", [?MODULE, Job1]),
-                    exit(normal)
-            end;
-        finished ->
-            case couch_jobs:finish(TxDb, Job1, NewData) of
-                ok ->
-                    State;
-                {error, halt} ->
-                    couch_log:error("~s job halted :: ~w", [?MODULE, Job1]),
-                    exit(normal)
-            end
-    end.
+    fabric2_fdb:transactional(Db, fun(TxDb) ->
+        case UpdateType of
+            update ->
+                case couch_jobs:update(TxDb, Job1, NewData) of
+                    {ok, Job2} ->
+                        State#{job := Job2};
+                    {error, halt} ->
+                        couch_log:error("~s job halted :: ~w", [?MODULE, Job1]),
+                        exit(normal)
+                end;
+            finished ->
+                case couch_jobs:finish(TxDb, Job1, NewData) of
+                    ok ->
+                        State;
+                    {error, halt} ->
+                        couch_log:error("~s job halted :: ~w", [?MODULE, Job1]),
+                        exit(normal)
+                end
+        end
+    end).
