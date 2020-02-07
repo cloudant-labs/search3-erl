@@ -49,7 +49,6 @@ init() ->
         exit(normal)
     end,
     State = #{
-        tx_db => undefined,
         search_seq => undefined,
         count => 0,
         limit => config:get_integer("search3", "change_limit", 100),
@@ -89,8 +88,7 @@ update(#{} = Db, State) ->
 
 update_int(#{} = Db, State) ->
     State5 = fabric2_fdb:transactional(Db, fun(TxDb) ->
-        State1 = State#{tx_db := TxDb},
-        {ok, State2} = fold_changes(State1),
+        {ok, State2} = fold_changes(TxDb, State),
         #{
             count := Count,
             limit := Limit,
@@ -118,7 +116,6 @@ update_int(#{} = Db, State) ->
                 false ->
                     State4 = report_progress(Db, State3, update),
                     State4 #{
-                        tx_db := undefined,
                         count := 0,
                         doc_acc := [],
                         search_seq := LastSeq
@@ -139,11 +136,10 @@ update_int(#{} = Db, State) ->
             update_int(Db, State5)
     end.
 
-fold_changes(State) ->
+fold_changes(TxDb, State) ->
     #{
         search_seq := SearchSeq,
-        limit := Limit,
-        tx_db := TxDb
+        limit := Limit
     } = State,
     fabric2_db:fold_changes(TxDb, SearchSeq,
         fun load_changes_count/2, State, [{limit, Limit}]).
