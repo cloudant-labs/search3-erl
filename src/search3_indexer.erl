@@ -113,8 +113,6 @@ update_int(#{} = Db, State) ->
             State3 = maps:put(index, Index1, State2),
             case Count < Limit of
                 true ->
-                    % this should be only called once afer all docs are index
-                    search3_rpc:set_update_seq(Index1, LastSeq, <<>>),
                     report_progress(State3, finished),
                     finished;
                 false ->
