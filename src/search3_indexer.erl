@@ -62,11 +62,22 @@ init() ->
     },
     update(Db, State).
 
-update(#{} = Db, State) ->
+update(#{} = Db, #{job := Job, job_data := JobData} = State) ->
     try
         Index = maps:get(index, State),
-        {InitSession, Seq} = search3_rpc:get_update_seq(Index),
         Proc = get_os_process(Index#index.def_lang),
+        try
+            true = proc_prompt(Proc, [<<"add_fun">>, Index#index.def])
+        catch throw:{compilation_error, Msg} ->
+            couch_jobs:finish(undefined, Job, JobData#{
+                <<"error">> => <<"compilation_error">>,
+                <<"reason">> => Msg
+            })
+        after
+            ret_os_process(Proc),
+            exit(normal)
+        end,
+        {InitSession, Seq} = search3_rpc:get_update_seq(Index),
         % Start of a new session
         Index1 = Index#index{session=InitSession},
         NewState = State#{
@@ -76,7 +87,6 @@ update(#{} = Db, State) ->
             index => Index1
         },
         try
-            true = proc_prompt(Proc, [<<"add_fun">>, Index1#index.def]),
             update_int(Db, NewState)
         after
             ret_os_process(Proc)
