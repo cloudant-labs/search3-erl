@@ -1,6 +1,10 @@
 -module(search3_util).
 
--export([design_doc_to_index/3, get_doc/2, validate/2, list_indexes/1]).
+-export([design_doc_to_index/3,
+    get_doc/2,
+    validate/2,
+    list_indexes/1,
+    update_index_list/2]).
 
 -include_lib("couch/include/couch_db.hrl").
 -include_lib("fabric/include/fabric2.hrl").
@@ -93,7 +97,6 @@ ddoc_fold_cb({row, Row}, Acc) ->
         rows := Rows
     } = Acc,
     DDoc = load_ddoc_row(Db, Row),
-    #doc{body={Fields}} = DDoc,
     Indexes = design_doc_to_indexes(Db, DDoc),
     {ok, Acc#{rows:= Rows ++ Indexes}}.
 
@@ -101,3 +104,30 @@ load_ddoc_row(Db, Row) ->
     {_, DDocId} = lists:keyfind(id, 1, Row),
     {ok, DDoc} = fabric2_db:open_doc(Db, DDocId),
     DDoc.
+
+update_index_list(Db, Index) ->
+    #{
+        db_prefix := DbPrefix
+    } = Db,
+    #index{
+        ddoc_id = Id
+    } = Index,
+    Key = create_index_key(Id, DbPrefix),
+    fabric2_fdb:transactional(Db, fun(TxDb) ->
+        add_index_to_list(TxDb, Key)
+    end).
+
+create_index_key(DDocId, DbPrefix) ->
+    erlfdb_tuple:pack({?DB_SEARCH, ?INDEX_LIST, DDocId}, DbPrefix).
+
+add_index_to_list(TxDb, Key) ->
+    #{
+        tx := Tx
+    } = TxDb,
+    erlfdb:set(Tx, Key, <<"0">>).
+
+remove_index_from_list(TxDb, Key) ->
+    #{
+        tx := Tx
+    } = TxDb,
+    erlfdb:clear(Tx, Key).

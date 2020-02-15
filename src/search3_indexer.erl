@@ -77,6 +77,7 @@ update(#{} = Db, State) ->
         },
         try
             true = proc_prompt(Proc, [<<"add_fun">>, Index1#index.def]),
+            search3_util:update_index_list(Db, Index),
             update_int(Db, NewState)
         after
             ret_os_process(Proc)
@@ -87,7 +88,7 @@ update(#{} = Db, State) ->
         erlang:error(database_does_not_exist)
     end.
 
-update_int(#{} = Db, State) ->
+update_int(#{db_prefix := DbPrefix} = Db, State) ->
     State5 = fabric2_fdb:transactional(Db, fun(TxDb) ->
         State1 = State#{tx_db := TxDb},
         {ok, State2} = fold_changes(State1),
