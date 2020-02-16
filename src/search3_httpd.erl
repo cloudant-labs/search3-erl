@@ -1,6 +1,8 @@
 -module(search3_httpd).
 
--export([handle_search_req/3, handle_analyze_req/1]).
+-export([handle_search_req/3,
+    handle_analyze_req/1,
+    handle_cleanup_req/2]).
 
 -include("search3.hrl").
 -include_lib("couch/include/couch_db.hrl").
@@ -71,6 +73,12 @@ handle_analyze_req(#httpd{method='POST'}=Req) ->
     analyze(Req, Analyzer, Text);
 handle_analyze_req(Req) ->
     send_method_not_allowed(Req, "GET,POST").
+
+handle_cleanup_req(#httpd{method='POST'}=Req, Db) ->
+    ok = search3_cleanup:clear_deleted_indexes(Db),
+    send_json(Req, 202, {[{ok, true}]});
+handle_cleanup_req(Req, _Db) ->
+    send_method_not_allowed(Req, "POST").
 
 analyze(Req, Analyzer, Text) ->
     validate_string_or_object(Analyzer),
