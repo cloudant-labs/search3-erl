@@ -111,16 +111,15 @@ update_ddoc_list(Db, Index) ->
         db_prefix := DbPrefix
     } = Db,
     #index{
-        ddoc_id = Id,
-        prefix  = IndexPrefix
+        sig = Sig
     } = Index,
-    Key = create_key(Id, DbPrefix),
+    Key = create_key(Sig, DbPrefix),
     fabric2_fdb:transactional(Db, fun(TxDb) ->
         #{
             tx := Tx
         } = TxDb,
-        erlfdb:set(Tx, Key, IndexPrefix)
+        erlfdb:set(Tx, Key, <<"">>)
     end).
 
-create_key(DDocId, DbPrefix) ->
-    erlfdb_tuple:pack({?DB_SEARCH, ?INDEX_LIST, DDocId}, DbPrefix).
+create_key(Sig, DbPrefix) ->
+    erlfdb_tuple:pack({?DB_SEARCH, ?INDEX_LIST, Sig}, DbPrefix).

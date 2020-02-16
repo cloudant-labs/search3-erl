@@ -17,30 +17,29 @@ clear_deleted_indexes(Db) ->
             tx := Tx
         } = TxDb,
         Indexes = search3_util:list_indexes(TxDb),
-        DDocIds  = [element(4, Index) || Index <- Indexes],
-        IdsFromList = get_ddocids_from_list(Tx, DbPrefix),
-        ClearList = lists:filter(fun ({Id, _Val}) ->
-            not lists:member(Id, DDocIds)
-        end, IdsFromList),
+        ExistingSigs  = [element(10, Index) || Index <- Indexes],
+        SigsFromList = get_sigs_from_list(Tx, DbPrefix),
+        ClearList = lists:filter(fun (Sig) ->
+            not lists:member(Sig, ExistingSigs)
+        end, SigsFromList),
         clear_index_range(Tx, ClearList, DbPrefix),
         remove_indexes_from_list(Tx, ClearList, DbPrefix)
     end).
 
-get_ddocids_from_list(Tx, DbPrefix) -> 
+get_sigs_from_list(Tx, DbPrefix) ->
     Prefix = erlfdb_tuple:pack({?DB_SEARCH, ?INDEX_LIST}, DbPrefix),
     Opts = [{streaming_mode, want_all}],
     Rows = erlfdb:wait(erlfdb:get_range_startswith(Tx, Prefix, Opts)),
-    [{element(6, erlfdb_tuple:unpack(Id)), Val} || {Id, Val} <- Rows].
+    [element(6, erlfdb_tuple:unpack(Key)) || {Key, _} <- Rows].
 
 clear_index_range(Tx, ClearList, DbPrefix) ->
-    % SearchPrefix has a value:
-    % erlfdb_tuple:pack({?DB_SEARCH, Sig}, DbPrefix)
-    lists:foreach(fun ({_, SearchPrefix}) ->
+    lists:foreach(fun (Sig) ->
+        SearchPrefix = erlfdb_tuple:pack({?DB_SEARCH, Sig}, DbPrefix),
         erlfdb:clear_range_startswith(Tx, SearchPrefix)
     end, ClearList).
 
 remove_indexes_from_list(Tx, ClearList, DbPrefix) ->
-    lists:foreach(fun ({Id, _}) ->
-        Prefix = search3_util:create_key(Id, DbPrefix),
+    lists:foreach(fun (Sig) ->
+        Prefix = search3_util:create_key(Sig, DbPrefix),
         erlfdb:clear(Tx, Prefix)
     end, ClearList).
