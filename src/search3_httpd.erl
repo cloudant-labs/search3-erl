@@ -170,7 +170,9 @@ parse_index_param("highlight_post_tag", Value) ->
 parse_index_param("highlight_number", Value) ->
     [{highlight_number, validate_positive_int("highlight_number", Value)}];
 parse_index_param("highlight_size", Value) ->
-    [{highlight_size, validate_positive_int("highlight_size", Value)}].
+    [{highlight_size, validate_positive_int("highlight_size", Value)}];
+parse_index_param(Key, Value) ->
+    [{extra, {Key, Value}}].
 
 parse_json_index_param(<<"q">>, Value) ->
     [{q, Value}];
@@ -208,7 +210,9 @@ parse_json_index_param(<<"highlight_pos_tag">>, Value) ->
 parse_json_index_param(<<"highlight_number">>, Value) ->
     [{highlight_number, validate_positive_int("highlight_number", Value)}];
 parse_json_index_param(<<"highlight_size">>, Value) ->
-    [{highlight_size, validate_positive_int("highlight_size", Value)}].
+    [{highlight_size, validate_positive_int("highlight_size", Value)}];
+parse_json_index_param(Key, Value) ->
+    [{extra, {Key, Value}}].
 
 parse_bool_param(_, Val) when is_boolean(Val) ->
     Val;
