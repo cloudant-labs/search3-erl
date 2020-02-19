@@ -88,10 +88,9 @@ update(#{} = Db, State) ->
         erlang:error(database_does_not_exist)
     end.
 
-update_int(#{db_prefix := DbPrefix} = Db, State) ->
+update_int(Db, State) ->
     State5 = fabric2_fdb:transactional(Db, fun(TxDb) ->
         State1 = State#{tx_db := TxDb},
-        #{tx := Tx} = TxDb,
         {ok, State2} = fold_changes(State1),
         #{
             count := Count,
