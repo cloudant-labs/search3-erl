@@ -3,9 +3,8 @@
 -export([design_doc_to_index/3,
     get_doc/2,
     validate/2,
-    list_indexes/1,
-    update_ddoc_list/2,
-    create_key/2]).
+    list_indexes/1
+    ]).
 
 -include_lib("couch/include/couch_db.hrl").
 -include_lib("fabric/include/fabric2.hrl").
@@ -105,21 +104,3 @@ load_ddoc_row(Db, Row) ->
     {_, DDocId} = lists:keyfind(id, 1, Row),
     {ok, DDoc} = fabric2_db:open_doc(Db, DDocId),
     DDoc.
-
-update_ddoc_list(Db, Index) ->
-    #{
-        db_prefix := DbPrefix
-    } = Db,
-    #index{
-        sig = Sig
-    } = Index,
-    Key = create_key(Sig, DbPrefix),
-    fabric2_fdb:transactional(Db, fun(TxDb) ->
-        #{
-            tx := Tx
-        } = TxDb,
-        erlfdb:set(Tx, Key, <<"">>)
-    end).
-
-create_key(Sig, DbPrefix) ->
-    erlfdb_tuple:pack({?DB_SEARCH, ?INDEX_LIST, Sig}, DbPrefix).

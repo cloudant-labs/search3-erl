@@ -75,8 +75,8 @@ handle_analyze_req(Req) ->
     send_method_not_allowed(Req, "GET,POST").
 
 handle_cleanup_req(#httpd{method='POST'}=Req, Db) ->
-    ok = search3_cleanup:clear_unreachable_indexes(Db),
-    send_json(Req, 202, {[{ok, true}]});
+    Count = search3_rpc:index_cleanup(Db),
+    send_json(Req, 202, {[{total_indexes_cleaned, Count}]});
 handle_cleanup_req(Req, _Db) ->
     send_method_not_allowed(Req, "POST").
 
