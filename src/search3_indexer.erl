@@ -145,8 +145,9 @@ fold_changes(State) ->
         limit := Limit,
         tx_db := TxDb
     } = State,
+    Opts = [{limit, Limit}, {restart_tx, false}],
     fabric2_db:fold_changes(TxDb, SearchSeq,
-        fun load_changes_count/2, State, [{limit, Limit}]).
+        fun load_changes_count/2, State, Opts).
 
 load_changes_count(Change, Acc) ->
     #{
