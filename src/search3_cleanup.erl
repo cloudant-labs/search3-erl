@@ -1,14 +1,16 @@
 -module(search3_cleanup).
 
 -export([
-    clear_unreachable_indexes/1
+    clear_unreachable_indexes/2
 ]).
 
 -include("search3.hrl").
 -include_lib("couch/include/couch_db.hrl").
 -include_lib("fabric/include/fabric2.hrl").
 
-clear_unreachable_indexes(Db) ->
+clear_unreachable_indexes(Db, 0) ->
+    ok;
+clear_unreachable_indexes(Db, Attempts) ->
     Batch = config:get_integer("search3", "index_delete_batch", 300),
     #{
         db_prefix := DbPrefix
@@ -35,7 +37,7 @@ clear_unreachable_indexes(Db) ->
     end),
     case Remaining of
         N when N > 0 ->
-            clear_unreachable_indexes(Db);
+            clear_unreachable_indexes(Db, Attempts-1);
         _ ->
          ok
     end.
