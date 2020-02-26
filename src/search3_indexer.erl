@@ -77,6 +77,7 @@ update(#{} = Db, State) ->
         },
         try
             true = proc_prompt(Proc, [<<"add_fun">>, Index1#index.def]),
+            search3_util:update_ddoc_list(Db, Index),
             update_int(Db, NewState)
         after
             ret_os_process(Proc)

@@ -12,8 +12,7 @@
     update_index/5,
     search_index/2,
     get_channel/0,
-    analyze/2,
-    index_cleanup/1
+    analyze/2
     ]).
 
 get_update_seq(Index) ->
@@ -69,15 +68,6 @@ search_index(Index, QueryArgs) ->
             GroupMsg = construct_group_msg(IndexMsg, QueryArgs),
             group_search(GroupMsg)
     end.
-
-index_cleanup(Db) ->
-    Indexes = fabric2_fdb:transactional(Db, fun(TxDb) ->
-        search3_util:list_indexes(TxDb)
-    end),
-    Signatures = [Index#index.sig || Index <- Indexes],
-    Resp = index_cleanup_request(#{signatures => Signatures}),
-    {ok, Count} = search3_response:handle_cleanup_response(Resp),
-    Count.
 
 analyze(AnalyzerName, Text) ->
     AnalyzeMsg = #{analyzer => #{name => AnalyzerName}, text => Text},
@@ -324,9 +314,6 @@ delete_index(Msg) ->
 
 analyze(Msg) ->
     post("Analyze", Msg, analyze_request).
-
-index_cleanup_request(Msg) ->
-    post("IndexCleanup", Msg, index_cleanup_request).
 
 post(Action, Request, RequestType) ->
     EncodedRequest = search3_pb:encode_msg(Request, RequestType),
