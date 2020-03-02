@@ -12,5 +12,6 @@ url_handler(_) -> no_match.
 design_handler(<<"_search">>) -> fun search3_httpd:handle_search_req/3;
 design_handler(_) -> no_match.
 
+db_handler(<<"_search_cleanup">>)  -> fun search3_httpd:handle_cleanup_req/2;
 db_handler(_) -> no_match.
 

@@ -75,14 +75,14 @@ analyze(AnalyzerName, Text) ->
 
 %% Internal
 
-construct_index_msg(#index{prefix = Prefix, sig = Signature,
-        analyzer = <<"standard">>, session = Session}) ->
+construct_index_msg(#index{prefix = Prefix, analyzer = <<"standard">>,
+        session = Session}) ->
     #{prefix => Prefix, session => Session};
-construct_index_msg(#index{prefix = Prefix, sig = Signature,
-        analyzer = Analyzer, session = Session}) when is_binary(Analyzer) ->
+construct_index_msg(#index{prefix = Prefix, analyzer = Analyzer,
+        session = Session}) when is_binary(Analyzer) ->
     #{prefix => Prefix, session => Session, default => #{name => Analyzer}};
-construct_index_msg(#index{prefix = Prefix, sig = Signature,
-        analyzer = {Analyzer}, session= Session}) ->
+construct_index_msg(#index{prefix = Prefix, analyzer = {Analyzer},
+        session= Session}) ->
     case construct_analyzer_spec(Analyzer) of
         #{name := <<"perfield">>, stopwords := Stopwords} ->
             Fields = construct_per_fields(Analyzer),
@@ -167,7 +167,6 @@ construct_search_msg(Prefix, #index_query_args{}=QueryArgs) ->
         bookmark = Bookmark,
         stale = Stale,
         sort = Sort,
-        partition = Partition,
         counts = Counts,
         ranges = Ranges,
         drilldown = DrillDown,
@@ -219,13 +218,11 @@ construct_group_msg(Prefix, #index_query_args{}=QueryArgs) ->
     #index_query_args{
         q = Query,
         limit = Limit,
-        bookmark = Bookmark,
         stale = Stale,
         grouping = Grouping
     } = QueryArgs,
     #grouping{
         by = GroupBy,
-        offset = GroupOffSet,
         limit = GroupLimit,
         sort = GroupSort
     } = Grouping,
@@ -308,9 +305,6 @@ group_search(Msg) ->
 
 info(Msg) ->
     post("Info", Msg, index).
-
-delete_index(Msg) ->
-    post("Delete", Msg, index).
 
 analyze(Msg) ->
     post("Analyze", Msg, analyze_request).

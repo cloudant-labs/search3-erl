@@ -1,6 +1,8 @@
 -define(SEARCH_JOB_TYPE, <<"search">>).
 -define(SEARCH_CHANNEL, search_channel).
 
+-define(INDEX_LIST, <<"search_index_list">>).
+
 -record(index, {
     current_seq=0,
     dbname,

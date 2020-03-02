@@ -1,6 +1,8 @@
 -module(search3_httpd).
 
--export([handle_search_req/3, handle_analyze_req/1]).
+-export([handle_search_req/3,
+    handle_analyze_req/1,
+    handle_cleanup_req/2]).
 
 -include("search3.hrl").
 -include_lib("couch/include/couch_db.hrl").
@@ -9,7 +11,8 @@
     send_method_not_allowed/2,
     send_json/2,
     send_json/3,
-    send_error/2
+    send_error/2,
+    validate_ctype/2
 ]).
 
 handle_search_req(Req, Db, DDoc) ->
@@ -64,13 +67,21 @@ handle_analyze_req(#httpd{method='GET'}=Req) ->
     Text = couch_httpd:qs_value(Req, "text"),
     analyze(Req, Analyzer, Text);
 handle_analyze_req(#httpd{method='POST'}=Req) ->
-    couch_httpd:validate_ctype(Req, "application/json"),
+    chttpd:validate_ctype(Req, "application/json"),
     {Fields} = chttpd:json_body_obj(Req),
     Analyzer = couch_util:get_value(<<"analyzer">>, Fields),
     Text = couch_util:get_value(<<"text">>, Fields),
     analyze(Req, Analyzer, Text);
 handle_analyze_req(Req) ->
     send_method_not_allowed(Req, "GET,POST").
+
+handle_cleanup_req(#httpd{method='POST'}=Req, Db) ->
+    chttpd:validate_ctype(Req, "application/json"),
+    Tries = config:get_integer("search3", "index_cleanup_attempts", 10),
+    ok = search3_cleanup:clear_unreachable_indexes(Db, Tries),
+    send_json(Req, 202, {[{ok, true}]});
+handle_cleanup_req(Req, _Db) ->
+    send_method_not_allowed(Req, "POST").
 
 analyze(Req, Analyzer, Text) ->
     validate_string_or_object(Analyzer),
