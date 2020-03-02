@@ -156,7 +156,6 @@ load_changes_count(Change, Acc) ->
         count := Count
     } = Acc,
     #{
-        id := Id,
         sequence := LastSeq
     } = Change,
     Acc1 = Acc#{
