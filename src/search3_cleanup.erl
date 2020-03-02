@@ -11,7 +11,7 @@
 clear_unreachable_indexes(Db, 0) ->
     ok;
 clear_unreachable_indexes(Db, Attempts) ->
-    Batch = config:get_integer("search3", "index_delete_batch", 300),
+    Batch = config:get_integer("search3", "index_delete_batch", 100),
     #{
         db_prefix := DbPrefix
     } = Db,
