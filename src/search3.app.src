@@ -15,8 +15,8 @@
     couch_stats,
     fabric,
     couch_jobs,
-    grpcbox,
-    ctx
+    gpb,
+    ibrowse
    ]},
   {env,[]},
   {licenses, []},
