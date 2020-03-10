@@ -35,8 +35,28 @@ init() ->
         <<"name">> := IndexName,
         <<"sig">> := JobSig
     } = JobData,
-    {ok, Db} = fabric2_db:open(DbName, []),
-    {ok, DDoc} = fabric2_db:open_doc(Db, DDocId),
+
+    {ok, Db} = try
+        fabric2_db:open(DbName, [?ADMIN_CTX])
+    catch error:database_does_not_exist ->
+        couch_jobs:finish(undefined, Job, JobData#{
+            error => db_deleted,
+            reason => "Database was deleted"
+        }),
+        exit(normal)
+    end,
+
+    {ok, DDoc} = case fabric2_db:open_doc(Db, DDocId) of
+        {ok, DDoc0} ->
+            {ok, DDoc0};
+        {not_found, _} ->
+            couch_jobs:finish(undefined, Job, JobData#{
+                error => ddoc_deleted,
+                reason => "Design document was deleted"
+            }),
+            exit(normal)
+    end,
+
     {ok, Index} = search3_util:design_doc_to_index(Db, DDoc, IndexName),
     Index1 = Index#index{dbname = DbName},
     HexSig = fabric2_util:to_hex(Index1#index.sig),
