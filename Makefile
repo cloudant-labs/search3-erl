@@ -19,7 +19,6 @@ generate: src/search_client.erl src/search3_pb.erl
 
 
 src/search_client.erl src/search3_pb.erl: protos/search3.proto
-	@REBAR_COLOR=none rebar3 grpc gen
 
 
 compile:
