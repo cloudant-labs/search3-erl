@@ -67,15 +67,11 @@ get_doc(Db, DocId) ->
 
 validate(Db, DDoc) ->
     Indexes = design_doc_to_indexes(Db, DDoc),
-    Lang = <<"javascript">>,
-    ValidateIndexes = fun(Proc, #index{def = Def, name = Name}) ->
-        couch_query_servers:try_compile(Proc, search, Name, Def)
-    end,
-    Proc = couch_query_servers:get_os_process(Lang),
-    try
-        lists:foreach(fun(I) -> ValidateIndexes(Proc, I) end, Indexes)
-    after
-        couch_query_servers:ret_os_process(Proc)
+    case Indexes of
+        [] ->
+            ok;
+        _ ->
+            throw(not_implemented)
     end.
 
 list_indexes(Db) ->
